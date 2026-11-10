@@ -1,0 +1,97 @@
+/* ============================================================
+ * style.css — 全项目共享样式【陈滢竹负责：这里只是基础版骨架，
+ * 配色/圆角/间距/字体都欢迎你大改，改完 index 和 result 自动生效】
+ * 设计基调：移动端优先（max-width 480px 居中卡片），蓝系主色
+ * ============================================================ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --primary: #2b6cb0;      /* 主色 */
+  --primary-light: #ebf4ff;
+  --text: #2d3748;
+  --text-sub: #718096;
+  --danger: #e53e3e;
+  --ok: #2f855a;
+  --radius: 12px;
+}
+
+body {
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f0f4f8;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.page { max-width: 480px; margin: 0 auto; padding: 16px 14px 40px; }
+
+/* 顶部标题 */
+.header { text-align: center; padding: 18px 0 6px; }
+.header h1 { font-size: 20px; color: var(--primary); }
+.header p { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
+
+/* 卡片 */
+.card {
+  background: #fff; border-radius: var(--radius);
+  padding: 14px; margin-top: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+.card h2 { font-size: 15px; margin-bottom: 10px; color: var(--primary); }
+
+/* 表单 */
+.field { margin-bottom: 10px; }
+.field label { font-size: 12px; color: var(--text-sub); display: block; margin-bottom: 3px; }
+.field input, .field select {
+  width: 100%; padding: 9px 10px; font-size: 14px;
+  border: 1px solid #cbd5e0; border-radius: 8px; background: #fff; color: var(--text);
+}
+.field input:focus, .field select:focus { outline: none; border-color: var(--primary); }
+
+/* 成员卡片 */
+.member-card { border-left: 3px solid var(--primary); }
+.member-card .row2 { display: flex; gap: 8px; }
+.member-card .row2 .field { flex: 1; }
+.member-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.member-head b { font-size: 14px; }
+.remove-btn {
+  border: none; background: #fed7d7; color: var(--danger);
+  border-radius: 6px; padding: 3px 10px; font-size: 12px; cursor: pointer;
+}
+
+/* 按钮 */
+.btn {
+  display: block; width: 100%; padding: 12px; margin-top: 14px;
+  border: none; border-radius: var(--radius); font-size: 16px; cursor: pointer;
+}
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:disabled { opacity: .5; }
+.btn-ghost { background: var(--primary-light); color: var(--primary); margin-top: 10px; font-size: 14px; padding: 9px; }
+
+/* 结果页 */
+.scheme-card { border-top: 4px solid #cbd5e0; }
+.scheme-card.best { border-top-color: var(--ok); background: #f0fff4; }
+.scheme-rank { font-size: 12px; color: var(--text-sub); }
+.scheme-rank.best { color: var(--ok); font-weight: 600; }
+.scheme-score { float: right; font-size: 13px; color: var(--primary); font-weight: 600; }
+.conclusion { font-size: 13px; color: var(--ok); margin: 6px 0 10px; }
+.metrics { display: flex; gap: 6px; margin-bottom: 10px; }
+.metric {
+  flex: 1; background: var(--primary-light); border-radius: 8px;
+  text-align: center; padding: 6px 2px;
+}
+.metric b { display: block; font-size: 14px; color: var(--primary); }
+.metric span { font-size: 10px; color: var(--text-sub); }
+.bottleneck-tag {
+  display: inline-block; background: #fff5f5; color: var(--danger);
+  font-size: 11px; border-radius: 4px; padding: 1px 6px; margin-left: 6px;
+}
+.leg { font-size: 12px; color: var(--text-sub); padding: 3px 0; border-top: 1px dashed #e2e8f0; }
+
+/* 地图占位区【张宇桐：接高德 JS API 后替换这个 div 的内容】 */
+.map-placeholder {
+  border: 2px dashed #a0aec0; border-radius: var(--radius);
+  min-height: 180px; display: flex; align-items: center; justify-content: center;
+  color: var(--text-sub); font-size: 13px; text-align: center; padding: 10px;
+}
+
+.hint { font-size: 11px; color: var(--text-sub); margin-top: 8px; }

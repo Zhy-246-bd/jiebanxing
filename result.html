@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>结伴行 · 方案结果</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <h1>方案对比</h1>
+      <p id="subtitle">加载中…</p>
+    </div>
+
+    <!-- TODO 张宇桐：接高德 JS API 后，把下面这个占位区替换成真实地图，
+         画出全员起点（蓝点）、集合点（黄点）、目的地（红星）和路线 -->
+    <div class="map-placeholder" id="mapArea">地图区域（张宇桐：接高德 JS API 后在此绘制起点 / 集合点 / 目的地与路线）</div>
+
+    <div id="schemeList"></div>
+
+    <button class="btn btn-ghost" onclick="location.href='index.html'">← 返回修改信息</button>
+  </div>
+
+  <script src="js/formats.js"></script>
+  <script>
+    var data = JSON.parse(localStorage.getItem("jbx_result") || "null");
+    if (!data) { location.href = "index.html"; }
+
+    document.getElementById("subtitle").textContent =
+      data.members.length + " 人同行 · " + (data.city ? data.city + " · " : "") +
+      "目的地：" + data.dest + " · 按综合得分排序";
+
+    var box = document.getElementById("schemeList");
+    data.result.schemes.forEach(function (s, i) {
+      var best = i === 0;
+      var card = document.createElement("div");
+      card.className = "card scheme-card" + (best ? " best" : "");
+      var legsHtml = s.legs.map(function (l) {
+        var segs = l.segments.map(function (seg) {
+          return seg.from + " →" + (seg.to === data.dest ? "目的地" : seg.to) +
+            "（" + MODE_LABEL[seg.mode] + " " + seg.durationMin + "分钟 / ¥" + seg.cost + "）";
+        }).join("　再　");
+        return '<div class="leg"><b>' + l.member + '</b>' +
+          (l.isBottleneck ? '<span class="bottleneck-tag">瓶颈成员</span>' : '') +
+          '：' + segs + '</div>';
+      }).join("");
+      card.innerHTML =
+        '<span class="scheme-score">综合得分 ' + s.score + '</span>' +
+        '<span class="scheme-rank' + (best ? " best" : "") + '">' + (best ? "★ 推荐" : "备选") + '</span>' +
+        '<h2>' + s.name + '</h2>' +
+        '<div class="conclusion">' + s.conclusion + '</div>' +
+        '<div class="metrics">' +
+        '<div class="metric"><b>' + s.metrics.totalTimeMin + '</b><span>总耗时(分)</span></div>' +
+        '<div class="metric"><b>¥' + s.metrics.totalCost + '</b><span>总费用</span></div>' +
+        '<div class="metric"><b>' + s.metrics.worstTimeMin + '</b><span>最长单人(分)</span></div>' +
+        '<div class="metric"><b>' + s.metrics.maxWaitMin + '</b><span>最长等待(分)</span></div>' +
+        '</div>' + legsHtml;
+      box.appendChild(card);
+    });
+  </script>
+</body>
+</html>

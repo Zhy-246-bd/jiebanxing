@@ -1,0 +1,51 @@
+# ============================================================
+#  .gitignore — 这些文件不会被提交到 GitHub
+#  规则：密钥、证书、压缩包、系统垃圾文件，一律不进仓库
+# ============================================================
+
+# ── 最重要：本地 Key（每人自己一份，绝不提交）──
+js/config.local.js
+config.local.js
+*.local.js
+!.gitignore
+
+# ── 签名证书 / 私钥 / 密码（这些泄露了 APK 谁都能重新签）──
+*.keystore
+*.jks
+*.p12
+*.pem
+*.key
+*.cer
+*.crt
+*.pfx
+*pwd*
+*password*
+*密码*
+*证书*
+*keystore*
+
+# ── 交接包 / 压缩包：靠 Git 同步文件，不需要再传 zip ──
+*.zip
+*.rar
+*.7z
+结伴行-交接包/
+.merge/
+
+# ── 中间产物、备份 ──
+*.log
+*.bak
+*.tmp
+*.tmp.*
+.结伴行-*/
+
+# ── 依赖与编辑器 ──
+node_modules/
+package-lock.json
+.vscode/settings.json
+.idea/
+
+# ── 系统垃圾 ──
+.DS_Store
+Thumbs.db
+desktop.ini
+~$*

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>结伴行 · 信息录入</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <h1>结伴行</h1>
+      <p>多人出行路线智能规划 · 3~8 人小群体</p>
+    </div>
+
+    <div class="card">
+      <h2>出行城市</h2>
+      <div class="field">
+        <label>城市（决定地名解析范围与公交换乘，切换后示例数据会按该城市重填）</label>
+        <select id="citySelect"></select>
+      </div>
+      <p class="hint" id="cityHint"></p>
+    </div>
+
+    <div class="card">
+      <h2>共同目的地</h2>
+      <div class="field">
+        <label>大家要去的地方</label>
+        <input id="dest" placeholder="填写目的地">
+      </div>
+    </div>
+
+    <div id="memberList"></div>
+
+    <button class="btn btn-ghost" id="addMember">＋ 添加一位成员</button>
+    <button class="btn btn-primary" id="generate">生成三套方案</button>
+    <p class="hint">填好后点"生成三套方案"，会给出全部直达 / 全员汇合 / 部分汇合三种走法并自动打分排序。</p>
+  </div>
+
+  <!-- 雷馨怡已联调完成：假数据换成真接口。
+       amap-api.js 内部已带"Key 错/断网 → 本地估算"的降级，mock-api.js 不再需要（文件留档，未引用）。 -->
+
+  <!-- ① 本地 Key（不进仓库）：文件不存在时静默跳过，页面照常跑，只是数据走本地估算。
+       新拉代码的人：复制 js/config.example.js 为 js/config.local.js，填入高德 Web 服务 Key。 -->
+  <script src="js/config.local.js"
+          onerror="console.info('%c[结伴行] 未找到 js/config.local.js，当前用本地估算数据。要接真实高德数据：复制 js/config.example.js 为 config.local.js 并填入 Key。','color:#e67e22')"></script>
+
+  <script src="js/formats.js"></script>
+  <script src="js/result-text.js"></script>
+  <script src="js/amap-api.js"></script>
+  <script src="js/cities.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
