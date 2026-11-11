@@ -111,7 +111,49 @@ g.__AMAP_KEY__ = "把Key填在这里";
 
 ---
 
-## 七、四条红线
+## 七、推不上去怎么办（国内网络常见）
+
+### 情况一：连不上 GitHub
+
+先用 **Watt Toolkit**（原 Steam++，免费）加速：打开软件 → 「网络加速」→ 勾选 **GitHub** → 点「一键加速」。
+它的原理是把 github.com 指到本机，**不是**提供一个代理端口，所以别去设 `http_proxy`。
+
+### 情况二：报 `schannel: CRYPT_E_NO_REVOCATION_CHECK`
+
+用了加速工具后常见，因为工具用的是自签证书，系统查不到吊销列表。在仓库目录里执行一次就行：
+
+```bash
+git config http.sslBackend schannel
+git config http.schannelCheckRevoke false
+```
+
+这两条只关掉"证书吊销检查"，**证书本身仍然校验**，不影响安全。
+
+### 情况三：报 `CONNECT tunnel failed` 或 `Failed to connect`
+
+你的电脑上残留了代理设置。先清掉：
+
+```bash
+git config --global --unset http.proxy
+git config --global --unset https.proxy
+```
+
+然后在 PowerShell 里临时清环境变量（只在当前窗口有效）：
+
+```powershell
+$env:http_proxy=""; $env:https_proxy=""; $env:HTTP_PROXY=""; $env:HTTPS_PROXY=""
+```
+
+再推一次。
+
+### 情况四：提示 `Authentication failed`
+
+不是密码，是**令牌**。GitHub 从 2021 年起就不认账号密码了：
+`Settings → Developer settings → Personal access tokens → Tokens(classic) → Generate new token`，勾 `repo`，生成后**复制保存**（只显示一次），推送时用户名填 GitHub 用户名，**密码位置粘贴这个令牌**。
+
+---
+
+## 八、四条红线
 
 1. **不提交 `config.local.js`**（Key 在里面）
 2. **不提交任何证书、密码、`*.keystore`**（`.gitignore` 已挡，但别手动强推）
@@ -120,7 +162,7 @@ g.__AMAP_KEY__ = "把Key填在这里";
 
 ---
 
-## 八、每天的三步（贴在群公告里）
+## 九、每天的三步（贴在群公告里）
 
 1. 开工前：**拉取最新代码**（网页版重新下载 / 客户端 `Pull`）
 2. 改完：**自己双击 index.html 跑一遍**，确认没把页面改坏
