@@ -19,6 +19,17 @@
         <label>城市（决定地名解析范围与公交换乘，切换后示例数据会按该城市重填）</label>
         <select id="citySelect"></select>
       </div>
+
+      <!-- 下拉选"其他城市"后展开：联网查 adcode 和地铁站，支持全国任意城市 -->
+      <div id="customCityBox" style="display:none">
+        <div class="field">
+          <label>城市名（全国任意地级市，如：长沙 / 西安 / 桂林 / 昆山）</label>
+          <input id="customCityName" placeholder="输入城市名后点下面的按钮">
+        </div>
+        <button class="btn btn-ghost" id="customCityGo">添加并切换</button>
+      </div>
+
+      <p class="hint" id="customCityMsg"></p>
       <p class="hint" id="cityHint"></p>
     </div>
 
@@ -49,6 +60,8 @@
   <script src="js/result-text.js"></script>
   <script src="js/amap-api.js"></script>
   <script src="js/cities.js"></script>
+  <!-- 任意城市在线解析：依赖 amap-api.js 的 AMAP_KEY 和 _distanceKm，必须放在它后面 -->
+  <script src="js/city-online.js"></script>
   <script src="js/engine.js"></script>
   <script src="js/app.js"></script>
 </body>

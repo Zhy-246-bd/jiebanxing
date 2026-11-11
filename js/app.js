@@ -124,25 +124,46 @@ function updateCityUI() {
   document.getElementById("cityHint").textContent =
     "当前城市：" + c.name + " · 地名解析、公交换乘、候选集合点（" +
     c.stations.join(" / ") + "）都按该城市计算";
-  document.getElementById("dest").placeholder = "填写目的地，如：" + c.destExample;
+  document.getElementById("dest").placeholder =
+    "填写目的地" + (c.destExample ? "，如：" + c.destExample : "");
 }
 
 var citySelect = document.getElementById("citySelect");
-getCityList().forEach(function (c) {
-  var opt = document.createElement("option");
-  opt.value = c.key;
-  opt.textContent = c.name;
-  citySelect.appendChild(opt);
-});
-citySelect.value = currentCityKey();
-updateCityUI();
+var customBox = document.getElementById("customCityBox");
+var customInput = document.getElementById("customCityName");
+var customGo = document.getElementById("customCityGo");
+var customMsg = document.getElementById("customCityMsg");
 
-citySelect.addEventListener("change", function () {
+function setCustomMsg(text, type) {
+  customMsg.textContent = text || "";
+  customMsg.className = "hint" + (type ? " hint-" + type : "");
+}
+
+/* 下拉列表：预置 6 城 + 已添加过的自定义城市 + "其他城市"入口 */
+function renderCityOptions(selectedKey) {
+  citySelect.innerHTML = "";
+  getCityList().forEach(function (c) {
+    var opt = document.createElement("option");
+    opt.value = c.key;
+    opt.textContent = c.custom ? c.name + "（自定义）" : c.name;
+    citySelect.appendChild(opt);
+  });
+  var other = document.createElement("option");
+  other.value = "__custom__";
+  other.textContent = "＋ 其他城市（手动输入）";
+  citySelect.appendChild(other);
+  citySelect.value = selectedKey || currentCityKey();
+}
+
+/* 真正切城市：同步三件套 + 候选集合点 + 清缓存，再决定要不要刷新示例成员 */
+function switchToCity(key) {
   var prevKey = currentCityKey();
-  applyCity(this.value);   // 同步切换地名解析城市、公交城市代码、中心点、候选集合点，并清空地名缓存
+  applyCity(key);
+  customBox.style.display = "none";
   updateCityUI();
+
   if (isDemoOf(members, prevKey)) {
-    // 成员还是上一城市的示例 → 直接换成新城市的示例，点开就能演示
+    // 成员还是上一城市的示例 → 换成新城市的示例，点开就能演示
     members = withIds(demoMembers(currentCityKey()));
     nextId = members.reduce(function (m, x) { return Math.max(m, x.id); }, 0) + 1;
     document.getElementById("dest").value = "";
@@ -153,6 +174,52 @@ citySelect.addEventListener("change", function () {
     document.getElementById("cityHint").textContent =
       "已切换为" + currentCity().name + "，地名解析范围已变，请检查每位成员的出发地是否属于该城市";
   }
+}
+
+renderCityOptions();
+updateCityUI();
+
+citySelect.addEventListener("change", function () {
+  if (this.value === "__custom__") {
+    this.value = currentCityKey();     // 只是打开输入框，当前城市先不变
+    customBox.style.display = "block";
+    setCustomMsg("", "");
+    customInput.focus();
+    return;
+  }
+  switchToCity(this.value);
+});
+
+/* 在线添加任意城市：城市名 → adcode + 中心点 + 候选地铁站 */
+var cityBusy = false;
+customGo.addEventListener("click", function () {
+  if (cityBusy) return;
+  var name = customInput.value.trim();
+  if (!name) { setCustomMsg("请先填城市名", "err"); customInput.focus(); return; }
+
+  cityBusy = true;
+  customGo.disabled = true;
+  customGo.textContent = "正在查询…";
+  setCustomMsg("正在查「" + name + "」的行政区代码和地铁站，大约 2 秒…", "");
+
+  prepareOnlineCity(name).then(function (city) {
+    var c = addCustomCity(city);
+    renderCityOptions(c.key);
+    switchToCity(c.key);                 // 内部会隐藏输入框、刷新示例成员
+    customInput.value = "";
+    setCustomMsg("已切换到 " + c.name + "，候选集合点：" + c.stations.join(" / "), "ok");
+  }).catch(function (e) {
+    setCustomMsg(e.message || "添加失败，换个城市名试试", "err");
+  }).then(function () {
+    cityBusy = false;
+    customGo.disabled = false;
+    customGo.textContent = "添加并切换";
+  });
+});
+
+/* 回车等于点按钮 */
+customInput.addEventListener("keydown", function (e) {
+  if (e.key === "Enter") customGo.click();
 });
 
 render();

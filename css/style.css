@@ -95,3 +95,5 @@ body {
 }
 
 .hint { font-size: 11px; color: var(--text-sub); margin-top: 8px; }
+.hint-ok { color: #2e7d32; }
+.hint-err { color: #c62828; }

@@ -119,8 +119,38 @@ function applyCity(key) {
   return c;
 }
 
+/* ---------------- 自定义城市（在线解析后加进来的） ----------------
+   js/city-online.js 查出城市信息后调 addCustomCity() 塞进 CITIES，
+   并把完整对象存到 localStorage —— 因为下次打开时要能直接恢复，
+   不能重新联网查一遍（否则用户断网就回不到自己选的城市）。 */
+var CUSTOM_STORE_KEY = "jbx_custom_cities";
+
+function loadCustomCities() {
+  var list = null;
+  try { list = JSON.parse(localStorage.getItem(CUSTOM_STORE_KEY)); } catch (e) { /* 数据坏了当没有 */ }
+  if (!list || !list.length) return;
+  list.forEach(function (c) {
+    if (c && c.key && c.adcode && !getCity(c.key)) CITIES.push(c);
+  });
+}
+
+function saveCustomCities() {
+  var list = CITIES.filter(function (c) { return c.custom; });
+  try { localStorage.setItem(CUSTOM_STORE_KEY, JSON.stringify(list)); } catch (e) { /* 存不下就算了，本次仍可用 */ }
+}
+
+/* 加入一个自定义城市；同一 adcode 已存在则直接复用（不重复占下拉项） */
+function addCustomCity(city) {
+  var existed = getCity(city.key);
+  if (existed) return existed;
+  CITIES.push(city);
+  saveCustomCities();
+  return city;
+}
+
 /* 启动时按上次选择恢复 */
 (function () {
+  loadCustomCities();
   var saved = null;
   try { saved = localStorage.getItem(CITY_STORE_KEY); } catch (e) { /* Node 环境 */ }
   applyCity(saved || CITIES[0].key);

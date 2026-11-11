@@ -13,7 +13,8 @@
  * 四条联调任务的落地位置：
  *   ① 适配层      → 本文件即适配层，模式映射见 MODE_MAP
  *   ② 地名→坐标   → _geoResolve()：geocode → inputtips → 全国 geocode，带缓存
- *   ③ 打车费      → 实测 v3/v5 驾车接口都不返回 taxi_cost，改走费用参考表（起步 12 元 + 2.3 元/公里）
+ *   ③ 打车费      → 走 v3 驾车 extensions=all 的 route.taxi_cost（高德按各城市真实运价报价，
+ *                    全国通用）；取不到时才退回费用参考表公式（起步 12 元 + 2.3 元/公里）
  *   ④ 浏览器兼容  → 纯 fetch + 全局函数写法，不需要 uni 垫片，也不需要 type="module"
  *
  * 降级策略：Key 错、断网、地名解析失败、请求超出预算 → 一律回退本地估算
@@ -25,7 +26,8 @@
  *   ① 缓存 key 全部带城市前缀 _ck()：切城市后即使缓存没清也不会串号
  *   ② 城市三件套只做"缺省兜底"，运行期由 js/cities.js 现读现赋，不在本文件里写死
  *   ③ 限频：并发 3→2、加全局最小间隔 MIN_INTERVAL_MS、重试 2→3 次并退避
- *   ④ 打车单价仍是占位值，等费用参考表（只改 TAXI_BASE / TAXI_PER_KM，公式不动）
+ *   ④ 打车费改直取高德 taxi_cost（2026-11-11）：TAXI_BASE / TAXI_PER_KM 只作兜底，
+ *      正常情况下改这两个值不影响结果——别再按"调参数"的思路改打车价。
  * ============================================================ */
 
 /* ---------------- 配置区（只改这里） ---------------- */
@@ -66,7 +68,7 @@ var RETRY_DELAY_MS = 1000;                           // 限频/网络失败的�
 var RETRY_MAX = 3;                                   // 失败重试次数上限
 var SAME_POINT_KM = 0.05;                            // 起终点重合（<50 米）不发请求，直接返回 0
 var TIMEOUT_MS = 8000;                               // 单请求超时
-var TAXI_BASE = 12, TAXI_PER_KM = 2.3;               // 打车估算：起步价 + 每公里（占位值，等费用参考表）
+var TAXI_BASE = 12, TAXI_PER_KM = 2.3;               // 打车费【仅兜底】用：正常走高德 taxi_cost，取不到才算公式
 
 var MODE_MAP = { taxi: "driving", bike: "bicycling", transit: "transit" };
 
@@ -298,18 +300,29 @@ function _requestRoute(mode, o, d) {
   var url, pick;
 
   if (mode === "taxi") {
-    // 驾车：v5 的总耗时在 cost.duration，距离在顶层 distance
-    url = "https://restapi.amap.com/v5/direction/driving?origin=" + origin + "&destination=" + dest +
-      "&show_fields=cost&key=" + AMAP_KEY;
+    /* 打车走 v3 而不是 v5：只有 v3 的 extensions=all 会返回 route.taxi_cost（预计打车费），
+       而且这个价格是高德按【所在城市的真实出租车运价】算的——全国所有城市通用，
+       换城市、加新城市都不用改任何参数（v5 的 cost 里实测只有 duration/tolls/
+       toll_distance/traffic_lights，没有打车费，所以不能走 v5）。
+
+       2026-11-11 实测（同一 Key，各城市取一条真实路线）：
+         武汉 10.4km → 23 元   北京 17.4km → 48 元   上海 21.7km → 69 元
+         广州  5.1km → 16 元   深圳 10.0km → 30 元   成都  9.9km → 23 元
+       对照原来的公式（12 + 2.3×km），武汉会算成 36 元，高估 56%——所以公式只留作兜底。 */
+    url = "https://restapi.amap.com/v3/direction/driving?origin=" + origin + "&destination=" + dest +
+      "&extensions=all&strategy=0&key=" + AMAP_KEY;
     pick = function (body) {
       var p = body.route && body.route.paths && body.route.paths[0];
       if (!p) throw new Error("驾车无可达路线");
-      var sec = (p.cost && p.cost.duration) || p.duration;
       var km = parseFloat(p.distance) / 1000;
-      // 高德驾车接口不返回打车费，按费用参考表估算（口径需张海燕在文档里同步）
+      var fee = body.route.taxi_cost;   // 注意：在 route 层，不在 paths[0] 里
+      var official = (fee !== undefined && fee !== null && fee !== "" && parseFloat(fee) > 0);
       return {
-        durationMin: _round1(parseFloat(sec) / 60), distanceKm: _round1(km),
-        cost: Math.round(TAXI_BASE + TAXI_PER_KM * km), costEstimated: true
+        durationMin: _round1(parseFloat(p.duration) / 60), distanceKm: _round1(km),
+        // 官方报价优先；个别路线没返回时才退回公式，并用 costEstimated 标出来
+        cost: official ? Math.round(parseFloat(fee)) : Math.round(TAXI_BASE + TAXI_PER_KM * km),
+        costEstimated: !official,
+        costSource: official ? "amap.taxi_cost" : "formula"
       };
     };
   } else if (mode === "transit") {
