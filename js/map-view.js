@@ -20,13 +20,59 @@
 (function (g) {
   "use strict";
 
-  /* ---------------- 0. 配置 ---------------- */
-  var JS_KEY  = (typeof g.__AMAP_JS_KEY__  === "string") ? g.__AMAP_JS_KEY__.trim()  : "";
-  var JS_CODE = (typeof g.__AMAP_JS_CODE__ === "string") ? g.__AMAP_JS_CODE__.trim() : "";
+  /* ---------------- 0. 配置 ----------------
+   * 本网页项目的写法（js/config.local.js）：
+   *   g.__AMAP_JS_KEY__  = "Web端(JS API) 类型的 Key"
+   *   g.__AMAP_JS_CODE__ = "配套的安全密钥 jscode"
+   * 同时兼容雷馨怡交接包里的命名（JS_API_KEY / JS_API_SECURITY_CODE），
+   * 也兼容对象形式 g.__AMAP_CONFIG__ = { JS_API_KEY, JS_API_SECURITY_CODE }，
+   * 这样以后两边合并、共用同一份配置时不用改代码。 */
+  function pickKey(g, names) {
+    for (var i = 0; i < names.length; i++) {
+      var v = g[names[i]];
+      if (typeof v === "string" && v.trim()) return v.trim();
+    }
+    var cfg = g.__AMAP_CONFIG__;
+    if (cfg && typeof cfg === "object") {
+      for (var j = 0; j < names.length; j++) {
+        var c = cfg[names[j]];
+        if (typeof c === "string" && c.trim()) return c.trim();
+      }
+    }
+    return "";
+  }
+  var JS_KEY  = pickKey(g, ["__AMAP_JS_KEY__", "JS_API_KEY", "AMAP_JS_KEY"]);
+  var JS_CODE = pickKey(g, ["__AMAP_JS_CODE__", "JS_API_SECURITY_CODE", "AMAP_SECURITY_CODE"]);
 
   var MODE_COLOR = { transit: "#3182ce", taxi: "#dd6b20", bike: "#38a169" };
-  var TIMEOUT_MS = 8000;      // 单次路线规划 / 地名解析的超时
-  var CONCURRENCY = 2;        // 并发上限：对高德友好一点
+  var TIMEOUT_MS = 15000;     // 单次路线规划 / 地名解析的超时
+  var MIN_INTERVAL_MS = 600;  // 两次请求的最小间隔：个人 Key 约 3 QPS，连着打会被限频（10021）
+  var MAX_CONCURRENT = 2;     // 并发上限
+
+  /* ---------------- 请求队列：限频 + 并发上限 ----------------
+   * js/amap-api.js 里雷馨怡已经踩过这个坑：个人 Key 只有 3 QPS，
+   * 并发开大 + 请求又密 → 返回 10021，路线规划静默失败。
+   * 所以这里也做「并发 2 + 全局最小间隔 600ms」，宁可慢一点，别丢结果。 */
+  var _reqQueue = [], _reqActive = 0, _nextSlotAt = 0;
+  function schedule(task) {
+    return new Promise(function (resolve) {
+      _reqQueue.push(function () { task().then(resolve, resolve); });
+      _pump();
+    });
+  }
+  function _pump() {
+    if (_reqActive >= MAX_CONCURRENT || !_reqQueue.length) return;
+    var now = Date.now();
+    var at = Math.max(now, _nextSlotAt);
+    _nextSlotAt = at + MIN_INTERVAL_MS;
+    var fn = _reqQueue.shift();
+    _reqActive++;
+    setTimeout(function () {
+      fn();
+      _reqActive--;
+      _pump();
+    }, Math.max(0, at - now));
+  }
 
   /* ---------------- 1. 纯逻辑：从 jbx_result 抽地点清单（Node 可测） ----------------
    * 返回 {
@@ -150,7 +196,7 @@
     if (JS_CODE) g._AMapSecurityConfig = { securityJsCode: JS_CODE };
     var s = document.createElement("script");
     s.src = "https://webapi.amap.com/maps?v=2.0&key=" + encodeURIComponent(JS_KEY) +
-      "&plugin=AMap.Geocoder,AMap.Driving,AMap.Transfer,AMap.Riding";
+      "&plugin=AMap.PlaceSearch,AMap.Geocoder,AMap.Driving,AMap.Transfer,AMap.Riding";
     s.onload = function () { cb(g.AMap && g.AMap.Map ? null : new Error("AMap 对象不可用")); };
     s.onerror = function () { cb(new Error("脚本加载失败（网络不通或被拦截）")); };
     document.head.appendChild(s);
@@ -168,14 +214,16 @@
     });
   }
 
-  /* ---------------- 6. 地名 → 坐标（Geocoder，本市优先 / 全国兜底，带缓存） ---------------- */
+  /* ---------------- 6. 地名 → 坐标 ----------------
+   * 踩过的坑：只用 Geocoder（geocode 地址接口）解析「黄鹤楼」这类 POI 名会偶发失败
+   * （地址接口对景点/地铁站这种 POI 名字支持不稳，实测同一批数据时好时坏）。
+   * 所以改成四级兜底，每次都新建实例（AMap 的服务对象不保证可重入，复用会串状态）：
+   *   ① POI 检索（限本城市）→ ② 地址解析（限本城市）→ ③ POI 检索（全国）→ ④ 地址解析（全国）
+   * POI 检索对「武昌火车站」「洪山广场」「黄鹤楼」这类名字命中率最高，放第一位。 */
   function makeGeocoder(AMap, city) {
-    var geoCity = new AMap.Geocoder({ city: city });
-    var geoAll = new AMap.Geocoder();   // 不限城市
     var cache = {};
 
-    function pickLng(result) {
-      var loc = result && result.geocodes && result.geocodes[0] && result.geocodes[0].location;
+    function locOf(loc) {
       if (!loc) return null;
       if (typeof loc === "string") {
         var p = loc.split(",");
@@ -184,33 +232,69 @@
       }
       return (isFinite(loc.lng) && isFinite(loc.lat)) ? [loc.lng, loc.lat] : null;
     }
-    function ask(geo, name) {
-      return withTimeout(function () {
-        return new Promise(function (resolve) {
-          geo.getLocation(name, function (status, result) {
-            resolve(status === "complete" ? pickLng(result) : null);
+    /* POI 检索：地铁站/景点/广场这类名字用它最准 */
+    function byPoi(name, limitCity) {
+      return schedule(function () {
+        return withTimeout(function () {
+          return new Promise(function (resolve) {
+            var ps = limitCity
+              ? new AMap.PlaceSearch({ city: city, citylimit: true, pageSize: 5 })
+              : new AMap.PlaceSearch({ pageSize: 5 });
+            ps.search(name, function (status, result) {
+              var pois = (status === "complete" && result && result.poiList && result.poiList.pois) || [];
+              if (!pois.length) return resolve(null);
+              /* 多个同名结果时，优先名字里含关键词的 */
+              var key = String(name).replace(/[（(].*?[)）]/g, "");
+              var pick = null;
+              for (var i = 0; i < pois.length; i++) {
+                if (String(pois[i].name || "").indexOf(key) >= 0) { pick = pois[i]; break; }
+              }
+              pick = pick || pois[0];
+              resolve(locOf(pick.location));
+            });
           });
-        });
-      }, TIMEOUT_MS);
+        }, TIMEOUT_MS);
+      });
+    }
+    /* 地址解析：真地址（门牌号、小区名）用它 */
+    function byGeo(name, limitCity) {
+      return schedule(function () {
+        return withTimeout(function () {
+          return new Promise(function (resolve) {
+            var geo = limitCity
+              ? new AMap.Geocoder({ city: city })
+              : new AMap.Geocoder();
+            geo.getLocation(name, function (status, result) {
+              resolve(status === "complete"
+                ? locOf(result && result.geocodes && result.geocodes[0] && result.geocodes[0].location)
+                : null);
+            });
+          });
+        }, TIMEOUT_MS);
+      });
     }
     return {
       one: function (name) {
         if (cache[name] !== undefined) return cache[name];
-        cache[name] = ask(geoCity, name).then(function (p) {
-          return p || ask(geoAll, name);    // 本市查不到 → 全国兜底
-        });
+        cache[name] = byPoi(name, true)
+          .then(function (p) { return p || byGeo(name, true); })
+          .then(function (p) { return p || byPoi(name, false); })
+          .then(function (p) { return p || byGeo(name, false); });
         return cache[name];
       }
     };
   }
 
   /* ---------------- 7. 路线规划（三种方式，几何防御式提取） ----------------
-   * 高德不同插件返回结构不同（routes[].steps[].path / plans[].segments[].path），
-   * 这里统一抽成 LngLat 数组；抽不出来就退 null → 上层画虚线直线。 */
+   * 高德 2.0 三种插件返回结构完全不同，实测抓到的结构：
+   *   驾车 Driving：route.steps[i].path        （route 上没有 path）
+   *   公交换乘 Transfer：plan.path             （plan 上直接有 path）
+   *   骑行 Riding：route.rides[i].path         （既没有 path 也没有 steps）
+   * 所以这里逐个兼容，抽不出来就返回 null → 上层画虚线直线兜底。 */
   function collectPath(obj) {
     if (!obj) return null;
     if (obj.path && obj.path.length) return obj.path;
-    var steps = obj.steps || obj.segments || [];
+    var steps = obj.steps || obj.segments || obj.rides || [];
     var out = [];
     for (var i = 0; i < steps.length; i++) {
       var s = steps[i];
@@ -223,45 +307,66 @@
 
   function makePlanner(AMap, city) {
     var cache = {};
+
+    /* 三种方式各包一层：统一返回 { path, status }
+       status 不是 complete / path 取不到 → 上层记为失败并提示原因 */
     function drive(o, d) {
-      return withTimeout(function () {
-        return new Promise(function (resolve) {
-          new AMap.Driving({ autoFitView: false }).search(o, d, function (status, result) {
-            resolve(status === "complete" && result.routes && result.routes[0] ? collectPath(result.routes[0]) : null);
+      return schedule(function () {
+        return withTimeout(function () {
+          return new Promise(function (resolve) {
+            new AMap.Driving({ autoFitView: false }).search(o, d, function (status, result) {
+              var r = result && result.routes && result.routes[0];
+              resolve({ status: status, path: r ? collectPath(r) : null, kind: "驾车" });
+            });
           });
-        });
-      }, TIMEOUT_MS);
+        }, TIMEOUT_MS);
+      });
     }
     function ride(o, d) {
-      return withTimeout(function () {
-        return new Promise(function (resolve) {
-          new AMap.Riding({ autoFitView: false }).search(o, d, function (status, result) {
-            resolve(status === "complete" && result.routes && result.routes[0] ? collectPath(result.routes[0]) : null);
+      return schedule(function () {
+        return withTimeout(function () {
+          return new Promise(function (resolve) {
+            new AMap.Riding({ autoFitView: false }).search(o, d, function (status, result) {
+              var r = result && result.routes && result.routes[0];
+              resolve({ status: status, path: r ? collectPath(r) : null, kind: "骑行" });
+            });
           });
-        });
-      }, TIMEOUT_MS);
+        }, TIMEOUT_MS);
+      });
     }
     function transit(o, d) {
-      return withTimeout(function () {
-        return new Promise(function (resolve) {
-          new AMap.Transfer({ city: city, autoFitView: false }).search(o, d, function (status, result) {
-            resolve(status === "complete" && result.plans && result.plans[0] ? collectPath(result.plans[0]) : null);
+      return schedule(function () {
+        return withTimeout(function () {
+          return new Promise(function (resolve) {
+            new AMap.Transfer({ city: city, autoFitView: false }).search(o, d, function (status, result) {
+              var p = result && result.plans && result.plans[0];
+              resolve({ status: status, path: p ? collectPath(p) : null, kind: "公交" });
+            });
           });
-        });
-      }, TIMEOUT_MS);
+        }, TIMEOUT_MS);
+      });
+    }
+    function raw(mode, o, d) {
+      return (mode === "taxi") ? drive(o, d) : (mode === "bike") ? ride(o, d) : transit(o, d);
     }
     return {
+      /* 失败自动重试一次：高德服务偶发 no_data / 限频，重试一次大多能拿到 */
       query: function (mode, o, d) {
         var key = mode + "|" + o.join(",") + "|" + d.join(",");
         if (cache[key] !== undefined) return cache[key];
-        var task = (mode === "taxi") ? drive(o, d) : (mode === "bike") ? ride(o, d) : transit(o, d);
+        var task = raw(mode, o, d).then(function (res) {
+          if (res && res.path && res.path.length) return res;
+          return new Promise(function (r) { setTimeout(r, 800); })
+            .then(function () { return raw(mode, o, d); })
+            .then(function (res2) { return (res2 && res2.path && res2.path.length) ? res2 : res; });
+        });
         cache[key] = task;
         return task;
       }
     };
   }
 
-  /* 简易并发池：按 CONCURRENCY 依次执行任务，返回按原顺序的结果数组 */
+  /* 简易并发池（请求本身已在 schedule() 里排队限频，这里只负责收集结果和进度） */
   function runPool(tasks, limit, onProgress) {
     return new Promise(function (resolve) {
       var out = new Array(tasks.length), i = 0, done = 0;
@@ -320,7 +425,7 @@
     var geo = makeGeocoder(AMap, data.city || "全国");
     runPool(info.places.map(function (p) {
       return function () { return geo.one(p).then(function (c) { return { name: p, coord: c }; }); };
-    }), CONCURRENCY, function (d, n) { setHint("正在定位地点 " + d + "/" + n + "…"); })
+    }), MAX_CONCURRENT, function (d, n) { setHint("正在定位地点 " + d + "/" + n + "…"); })
     .then(function (rs) {
       var coords = {}, missed = [];
       (rs || []).forEach(function (r) {
@@ -367,14 +472,21 @@
       runPool(allSegs.map(function (seg) {
         return function () {
           var o = coords[seg.from], d = coords[seg.to];
-          if (!o || !d) return Promise.resolve(null);
-          return planner.query(seg.mode, o, d).then(function (path) { return { seg: seg, path: path }; });
+          if (!o || !d) return Promise.resolve({ seg: seg, path: null, status: "坐标缺失" });
+          return planner.query(seg.mode, o, d).then(function (res) {
+            return { seg: seg, path: (res && res.path) || null, status: (res && res.status) || "?", kind: (res && res.kind) || "" };
+          });
         };
-      }), CONCURRENCY, function (d, n) { setHint("正在规划路线 " + d + "/" + n + "…"); })
+      }), MAX_CONCURRENT, function (d, n) { setHint("正在规划路线 " + d + "/" + n + "…"); })
       .then(function (rs) {
         var bySeg = {};
-        var straight = 0;
-        (rs || []).forEach(function (r) { if (r) bySeg[r.seg.from + "|" + r.seg.to + "|" + r.seg.mode] = r.path; });
+        var failures = [];
+        (rs || []).forEach(function (r) {
+          if (!r) return;
+          var key = r.seg.from + "|" + r.seg.to + "|" + r.seg.mode;
+          bySeg[key] = r.path;
+          if (!r.path) failures.push(r.seg.from + "→" + r.seg.to + "（" + r.kind + " " + r.status + "）");
+        });
 
         function mkLine(seg) {
           var o = coords[seg.from], d = coords[seg.to];
@@ -389,7 +501,6 @@
             return new AMap.Polyline(Object.assign({ path: path }, opts));
           }
           /* 规划失败/超时 → 两点虚线兜底，方案完整性不受影响 */
-          straight++;
           return new AMap.Polyline(Object.assign({
             path: [o, d], strokeStyle: "dashed", strokeDasharray: [8, 8]
           }, opts));
@@ -448,7 +559,11 @@
 
         /* ---- 8.5 收尾提示 ---- */
         var bits = [];
-        if (straight) bits.push(straight + " 段路线未取到实际路径，已用虚线直线表示");
+        if (failures.length) {
+          bits.push(failures.length + " 段路线未取到实际路径（已用虚线直线表示）：" + failures.slice(0, 3).join("、") +
+            (failures.length > 3 ? " 等" : ""));
+          console.warn("[map-view] 路线规划失败明细：", failures);
+        }
         if (missed.length) bits.push("未能定位：" + missed.join("、") + "（对应标记已隐藏）");
         setHint(bits.length ? "⚠️ " + bits.join("；") : "✓ 三方案路线已绘制完成，点击上方标签切换方案");
       });
