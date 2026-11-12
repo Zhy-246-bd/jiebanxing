@@ -13,9 +13,21 @@
       <p id="subtitle">加载中…</p>
     </div>
 
-    <!-- TODO 张宇桐：接高德 JS API 后，把下面这个占位区替换成真实地图，
-         画出全员起点（蓝点）、集合点（黄点）、目的地（红星）和路线 -->
-    <div class="map-placeholder" id="mapArea">地图区域（张宇桐：接高德 JS API 后在此绘制起点 / 集合点 / 目的地与路线）</div>
+    <!-- 地图区域（张宇桐）：高德 JS API 渲染三方案路线，方案切换标签 + 图例由 js/map-view.js 注入。
+         Key 未配置时 map-view.js 会在这里显示配置指引，不影响下方卡片和对比表。 -->
+    <div id="mapBox">
+      <div id="mapTabs"></div>
+      <div id="mapArea"></div>
+      <div class="jbx-legend">
+        <span><i style="background:#3182ce"></i>地铁/公交</span>
+        <span><i style="background:#dd6b20"></i>打车</span>
+        <span><i style="background:#38a169"></i>骑行</span>
+        <span><i class="dot" style="background:#3182ce"></i>起点</span>
+        <span><i class="dot" style="background:#f6c344"></i>集合点</span>
+        <span><i class="dot" style="background:#e53e3e"></i>目的地</span>
+      </div>
+      <div id="mapHint"></div>
+    </div>
 
     <div id="schemeList"></div>
     <div id="compareTable"></div>
@@ -61,5 +73,6 @@
     });
   </script>
   <script src="js/compare-table.js"></script>
+  <script src="js/map-view.js"></script>
 </body>
 </html>
