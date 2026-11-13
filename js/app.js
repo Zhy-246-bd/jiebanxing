@@ -170,9 +170,17 @@ function switchToCity(key) {
     localStorage.removeItem(DEST_KEY);
     render();
   } else {
-    // 成员已被修改过 → 不覆盖用户数据，只提示检查
+    // 成员已被修改过 → 不覆盖成员，但目的地必须清：
+    // "江汉路"这种地名只在本市有意义，留着能直接生成另一城市的无意义方案（Q-04）
+    var destEl = document.getElementById("dest");
+    var destCleared = !!destEl.value.trim();
+    if (destCleared) {
+      destEl.value = "";
+      localStorage.removeItem(DEST_KEY);
+    }
     document.getElementById("cityHint").textContent =
-      "已切换为" + currentCity().name + "，地名解析范围已变，请检查每位成员的出发地是否属于该城市";
+      "已切换为" + currentCity().name + "，地名解析范围已变，请检查每位成员的出发地是否属于该城市" +
+      (destCleared ? "；原目的地属于上一城市，已清空，请重新填写" : "");
   }
 }
 
