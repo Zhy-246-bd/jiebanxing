@@ -30,6 +30,8 @@
 | `js/amap-api.js` | 雷馨怡 ✅ 已完成（11-10） | 真接口已接好：地名解析 + 三种方式 + 缓存 + 降级。**Key 不在这个文件里**，从 `js/config.local.js` 读；城市由 cities.js 切换 |
 | `js/config.example.js` | 全组只读 | Key 配置模板，复制成 `config.local.js` 后填（`config.local.js` 不进仓库） |
 | `js/data-hint.js` | 张海燕（新增 11-13） | 数据可信度提示条：把「哪几段是本地估算」写在结果页上，避免降级后仍显示假数据。只读 `localStorage`，不改任何渲染逻辑 |
+| `js/cloud-config.js` | 张海燕（新增 11-13） | 云服务公开配置（endpoint / publishableKey）。**不含任何密钥**，可进仓库；换应用只改这个文件 |
+| `js/cloud-api.js` | 张海燕（新增 11-13） | 房间制云读写封装：建房 / 读房 / 加入 / 写方案 / 事件流水，共 10 个函数，错误已翻译成中文。**页面还没接它** |
 | `js/mock-api.js` | 留档（页面已不引用） | 原假数据，保留作对照，不要删 |
 | `js/formats.js` | 张海燕（冻结） | 数据格式约定，**任何人不得单独改动**，要改先在群里说并经组长同意 |
 
