@@ -4,7 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>结伴行 · 方案结果</title>
+  <!-- 三层样式，顺序不能调：
+       1. style.css   —— 老骨架，只保留 scheme-card / leg / metric 等结果页专有类的兜底样式
+       2. style1.css  —— 陈滢竹的视觉体系（变量 / body / .card / .btn），result 页靠它跟封面统一
+       3. result.css  —— 陈滢竹的结果页覆盖层，在 </body> 前加载，能盖住下面三个脚本注入的样式
+       要改风格只改 css/result.css，本文件以及其他两个 css 都不用动。 -->
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style1.css">
 </head>
 <body>
   <div class="page">
@@ -92,5 +98,9 @@
   <script src="js/compare-table.js"></script>
   <script src="js/data-hint.js"></script>
   <script src="js/map-view.js"></script>
+
+  <!-- 必须放在最后：上面三个脚本会各自往 <head> 末尾追一段 <style>，
+       这里的链接排在其后，同权重下后者生效，才能盖住地图/对比表/提示条的硬编码配色。 -->
+  <link rel="stylesheet" href="css/result.css">
 </body>
 </html>

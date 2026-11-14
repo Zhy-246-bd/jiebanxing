@@ -1,0 +1,60 @@
+/* ============================================================================
+   result.css —— 结果页（result.html）样式覆盖层
+   负责人：陈滢竹
+   ============================================================================
+
+   这是结果页唯一需要你改的文件。result.html / style.css / style1.css 都不用动。
+
+   ── 加载顺序 ────────────────────────────────────────────────────────────────
+     style.css  →  style1.css  →  [地图/对比表/提示条 三个脚本各注入一段 style]
+                                →  result.css  ← 你改这里，它在最后，所以能盖住前面所有
+
+   ── 已经可以直接用的 ────────────────────────────────────────────────────────
+   1. style1.css 的变量全部可用，直接写，不用重复定义：
+        --bg #FCFAF7 / --blue #87A8BC / --blue-deep #5B7E92 / --sand #F4F1E9
+        --orange #E69F66 / --ink #3A4249 / --ink-soft / --line / --radius 16px
+   2. body、.card、.btn、.btn-primary 已经被 style1.css 接管，
+      结果页的卡片和返回按钮会自动跟着封面走，不用写。
+
+   ── 需要你覆盖的：三个模块的样式写死在 js 里，只能从这里压过去 ──────────────
+
+   【一】地图区（js/map-view.js，张宇桐的，别改那个文件）
+        容器        #mapBox  #mapTabs  #mapArea  #mapHint
+        方案切换页签  .jbx-tab
+        图例         .jbx-legend  .jbx-legend i  .jbx-legend i.dot
+        地图内标记   .jbx-mk  .jbx-mk-dot  .jbx-mk-start  .jbx-mk-meet
+                    .jbx-mk-dest  .jbx-mk-star  .jbx-mk-label
+        提示文字     .jbx-map-note
+        写死的颜色   #3182ce 地铁  #dd6b20 打车  #38a169 骑行
+                    #f6c344 集合点  #e53e3e 目的地
+
+   【二】对比表（js/compare-table.js，闫雅欣的，别改那个文件）
+        外层         .jbx-ct-wrap  .jbx-ct-title  .jbx-ct-note
+        表头/单元    .jbx-ct-head  .jbx-ct-min  .jbx-ct-unit
+        标记         .jbx-ct-badge  .jbx-ct-rank
+        最佳列       .is-best
+        空状态       .jbx-ct-empty
+        注意：本模块有 2 处 !important，若压不住，在你这条规则后也加 !important
+
+   【三】数据可信度提示条（js/data-hint.js，张海燕的，别改那个文件）
+        容器         .data-hint
+        状态         .data-hint--ok（全真实）  .data-hint--warn（部分估算）  .data-hint--bad（全估算）
+        内部         .data-hint__icon
+        写死的颜色   #38a169 绿  #d69e2e 黄  #e53e3e 红 及对应浅底
+
+   【四】结果页专有类，目前还是 style.css 的老冷蓝配色，建议重写
+        .scheme-card（含 .best 态）  .scheme-score  .scheme-rank（含 .best）
+        .conclusion  .metrics  .metric  .metric b  .metric span
+        .leg  .bottleneck-tag  .page  .header  .header h1  .header p
+
+   ── 规矩 ────────────────────────────────────────────────────────────────────
+   · 可以改颜色、字号、间距、圆角、阴影、动效
+   · 不要改 class 名和 id 名——改名等于让上面三个 js 找不到节点，页面直接空白
+   · 不要在这里写 display:none 藏掉 #schemeList / #compareTable / #mapArea
+     （对比表内部靠 JS 判断 schemeList 是否存在来决定是否渲染）
+   · 回答线上地址必须是 https，改完让张海燕重新发布一次才能看到
+
+   ============================================================================ */
+
+/* 在下面写你的样式 */
+
