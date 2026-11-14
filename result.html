@@ -36,7 +36,8 @@
     <div id="schemeList"></div>
     <div id="compareTable"></div>
 
-    <button class="btn btn-ghost" onclick="location.href='index.html'">← 返回修改信息</button>
+    <!-- 从房间进来的回房间，单机演示的回录入页；由下方脚本按 localStorage 判断 -->
+    <button class="btn btn-ghost" id="backBtn">← 返回修改信息</button>
   </div>
 
   <!-- 本地 Key（不进仓库）：文件不存在时静默跳过，页面照常跑，只是地图显示配置指引。
@@ -46,6 +47,13 @@
 
   <script src="js/formats.js"></script>
   <script>
+    // 返回去向：在自己房间里的回房间页，单机演示的回录入页
+    document.getElementById("backBtn").addEventListener("click", function () {
+      var inRoom = false;
+      try { inRoom = !!JSON.parse(localStorage.getItem("jbx_room_local") || "null"); } catch (e) { /* 数据坏了当没有 */ }
+      location.href = inRoom ? "index1.html" : "index.html";
+    });
+
     var data = JSON.parse(localStorage.getItem("jbx_result") || "null");
     if (!data) { location.href = "index.html"; }
 

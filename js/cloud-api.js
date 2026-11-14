@@ -198,10 +198,11 @@
    * 加入房间 / 更新自己的信息（同一台设备重复提交就是更新，不会变成两个人）
    * @param {string} code
    * @param {Object} me { name, origin, mode, budget, winStart, winEnd }
+   * @param {string} [tokenOverride] 发起人代填时传一个临时令牌，避免覆盖发起人自己那一行
    */
-  function joinRoom(code, me) {
+  function joinRoom(code, me, tokenOverride) {
     var c = String(code).trim().toUpperCase();
-    var token = deviceToken();
+    var token = tokenOverride || deviceToken();
     var row = {
       room_code: c,
       member_token: token,

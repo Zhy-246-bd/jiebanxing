@@ -73,13 +73,13 @@
           <stop offset="0" stop-color="#87A8BC" stop-opacity=".52"></stop>
           <stop offset=".55" stop-color="#87A8BC" stop-opacity=".22"></stop>
           <stop offset="1" stop-color="#87A8BC" stop-opacity="0"></stop>
-        </linearGradient>
+        </linearGradient>
         <filter id="haze" x="-12%" y="-12%" width="124%" height="130%">
           <feGaussianBlur stdDeviation="1.4"></feGaussianBlur>
         </filter>
         <filter id="hazeSoft" x="-25%" y="-25%" width="150%" height="160%">
           <feGaussianBlur stdDeviation="4.2"></feGaussianBlur>
-        </filter>
+        </filter>
       </defs>
 
       <rect width="1440" height="900" fill="url(#skyGrad)"></rect>
@@ -153,7 +153,7 @@
         <path d="M0 14 C -17 10 -21 -6 -12 -16 C -10 -30 3 -33 9 -25 C 20 -26 24 -11 17 -2 C 20 7 9 15 0 14 Z" transform="translate(736 790) scale(0.28)" fill="#9DB6B0" opacity=".45"></path>
         <path d="M0 14 C -17 10 -21 -6 -12 -16 C -10 -30 3 -33 9 -25 C 20 -26 24 -11 17 -2 C 20 7 9 15 0 14 Z" transform="translate(770 794) scale(0.24)" fill="#9DB6B0" opacity=".4"></path>
       </g>
-
+
 
       <!-- 【十六次调整】右侧中景树林、左下角淡墨与两侧芦苇已删除：
            这些装饰贴在画面底边、常被公路层遮去半截，显得不整洁；
@@ -346,6 +346,10 @@
         </div>
 
         <form id="createForm" novalidate>
+          <div class="field">
+            <label>出行城市（决定地名解析范围与公交换乘）</label>
+            <select id="citySelect" name="city"></select>
+          </div>
           <div class="field">
             <label>目的地</label>
             <input id="destInput" name="dest" type="text" placeholder="例如：杭州西湖 · 绍兴古城">
@@ -598,6 +602,25 @@
   <!-- Toast 宿主 -->
   <div class="toast-host" id="toastHost" aria-live="polite"></div>
 
+  <!-- ============================================================
+       【2026-11-14 接线】数据与计算层
+       原来本页是完全自包含的模拟交互（邀请码本地随机、方案耗时按
+       姓名算假数字）。现在接真接口：
+         · cities.js / city-online.js —— 城市与候选集合点（全国任意城市）
+         · amap-api.js + engine.js   —— 真实地名解析与三方案计算
+         · cloud-config.js/cloud-api.js —— 房间、成员、方案快照读写
+       文件缺失时页面照常打开，只是相关按钮会给出提示，不会白屏。
+       ============================================================ -->
+  <script src="js/config.local.js"
+          onerror="console.info('%c[结伴行] 未找到 js/config.local.js，本次将使用本地估算数据。','color:#e67e22')"></script>
+  <script src="js/formats.js"></script>
+  <script src="js/amap-api.js"></script>
+  <script src="js/cities.js"></script>
+  <script src="js/city-online.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/cloud-config.js"></script>
+  <script src="js/cloud-api.js"></script>
+
   <script>
   /* ==========================================================
    * 结伴行 · 纯前端模拟交互（全部内嵌）
@@ -610,23 +633,41 @@
       inviteCode: '',
       dest: '',
       date: '',
+      dateRaw: '',
       remark: '',
-      members: [],          // [{name, filled, isMe, startFrom, pref, window, budget, manual}]
+      cityKey: '',          // 城市 key（cities.js 里的 key，自定义城市也会生成一个）
+      cityName: '',
+      cityCode: '',         // 高德 adcode，房间存这个，成员端才能还原城市
+      members: [],          // [{id, token, name, filled, isMe, startFrom, pref, window, budget}]
       selectedPlan: '',     // direct | allMeet | partial
       isOwner: false,       // 发起人视角 / 普通成员视角（进入路径决定）
-      full: false           // 是否已标记满员
+      full: false,          // 方案是否已生成
+      planReady: false,     // 云端是否已有方案
+      polling: null         // 成员列表轮询定时器
     };
 
     // ---- 工具 ----
     const $ = (sel, root) => (root || document).querySelector(sel);
     const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
 
+    // 出发地提示跟着房间城市走：原来写死"上海虹桥站"，换个城市成员会填错地方
+    function updatePersonHint() {
+      const el = $('#fromInput');
+      if (el && state.cityName) {
+        el.placeholder = '例如：' + state.cityName + '火车站 / 市中心某商场';
+      }
+    }
+
     // ---- 视图切换 ----
+    // 进房间就开轮询（别人填完自动刷新），离开房间就停，不在后台空转
     function showView(id) {
       $$('.view').forEach(v => v.classList.remove('active'));
       const el = document.getElementById(id);
       if (el) el.classList.add('active');
       window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (id === 'room' && state.inviteCode) startPolling();
+      else stopPolling();
+      if (id === 'person') updatePersonHint();
     }
 
     // ---- Toast ----
@@ -645,6 +686,103 @@
     // ---- 弹窗 ----
     function openModal(id) { document.getElementById(id).classList.add('show'); }
     function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+    // ==========================================================
+    // 【2026-11-14 接线】云端房间
+    //
+    // 三个概念必须分清，否则会乱：
+    //   · 本机令牌 deviceToken —— 云端靠它认"我是房间里哪一位"，存在本机
+    //   · 邀请码 inviteCode    —— 靠它认"哪个房间"
+    //   · owner_token          —— 靠它认"谁建的房间"，决定谁能编辑房间信息
+    // 全程不注册、不登录、不收集手机号，这是本项目刻意保留的取舍。
+    // ==========================================================
+    const Cloud = window.JBXCloud;
+    const ROOM_STORE = 'jbx_room_local';   // 刷新页面后找回自己所在的房间
+
+    function cloudOk() {
+      if (!Cloud) {
+        toast('云服务脚本没加载成功，请确认联网后刷新页面');
+        return false;
+      }
+      return true;
+    }
+
+    // 云端成员行 → 页面成员对象（两边字段名不同，映射只在这一个地方做）
+    function mapCloudMember(row, myToken) {
+      const isMe = row.member_token === myToken;
+      const prefs = (row.mode || 'transit').split(',').filter(Boolean);
+      const win = row.win_start ? (row.win_start + (row.win_end ? ' – ' + row.win_end : '')) : '';
+      return {
+        id: row.id,
+        token: row.member_token,
+        name: row.name || (isMe ? '我' : '伙伴'),
+        filled: !!(row.origin && String(row.origin).trim()),
+        isMe: isMe,
+        startFrom: row.origin || '',
+        pref: prefs.join(','),
+        window: win,
+        budget: row.budget ? String(row.budget) : ''
+      };
+    }
+
+    // 把云端房间整体同步进 state；返回房间行
+    function syncRoom(code) {
+      return Cloud.getRoom(code).then(r => {
+        if (r.expired) throw new Error('这个房间已超过 7 天，数据已清理，请让发起人重新创建');
+        const room = r.room;
+        state.inviteCode = room.code;
+        state.dest = room.dest || '';
+        state.dateRaw = room.meet_start || '';
+        state.date = formatDate(room.meet_start) || '时间待定';
+        state.cityCode = room.city_code || '';
+        state.cityName = room.city_name || '';
+        state.isOwner = r.isOwner;
+        state.planReady = !!(room.plan && room.status === 'ready');
+        const myToken = Cloud.deviceToken();
+        state.members = (r.members || []).map(m => mapCloudMember(m, myToken));
+        return room;
+      });
+    }
+
+    // 本机记住"我在哪个房间"，刷新后不至于丢房间（房间数据本身在云端）
+    function persistRoom() {
+      try {
+        localStorage.setItem(ROOM_STORE, JSON.stringify({
+          code: state.inviteCode, cityKey: state.cityKey, cityName: state.cityName,
+          remark: state.remark, at: Date.now()
+        }));
+      } catch (e) { /* 隐私模式忽略 */ }
+    }
+    function readPersistedRoom() {
+      try { return JSON.parse(localStorage.getItem(ROOM_STORE) || 'null'); } catch (e) { return null; }
+    }
+
+    // 成员列表轮询：别人填完/被移除/方案生成，3 秒内能在本机看到
+    function startPolling() {
+      stopPolling();
+      state.polling = setInterval(() => {
+        if (!state.inviteCode) return;
+        if (!document.getElementById('room').classList.contains('active')) return;
+        syncRoom(state.inviteCode).then(() => renderRoom())
+          .catch(() => { /* 单次失败静默，下一轮再试，避免弱网时刷屏报错 */ });
+      }, 3000);
+    }
+    function stopPolling() {
+      if (state.polling) { clearInterval(state.polling); state.polling = null; }
+    }
+
+    // 读云端方案 → 转成 result.html 认识的 jbx_result 再跳转
+    // （result.html 只认 localStorage，谁进去之前先把数据准备好，那边就不用改）
+    function openPlan() {
+      if (!state.inviteCode) return;
+      toast('正在读取方案…');
+      Cloud.getRoom(state.inviteCode).then(r => {
+        const plan = r.room && r.room.plan;
+        if (!plan || !plan.jbx) throw new Error('发起人还没生成方案，请稍等');
+        localStorage.setItem('jbx_result', JSON.stringify(plan.jbx));
+        location.href = 'result.html';
+      }).catch(err => toast(err.message || '方案读取失败，请重试'));
+    }
 
     // ==========================================================
     // 【2026-11-13 调整注明】笔尖墨点动效已移除
@@ -679,12 +817,7 @@
     // ==========================================================
     // 视图2：创建房间
     // ==========================================================
-    function generateCode() {
-      const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-      let s = '';
-      for (let i = 0; i < 6; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
-      return s;
-    }
+    // 邀请码不再由本地随机生成：改由云端 createRoom 生成并落库（避免本地编的码在云端不存在）
 
     function formatDate(raw) {
       if (!raw) return '';
@@ -716,9 +849,12 @@
     const createForm = $('#createForm');
     createForm.addEventListener('submit', e => {
       e.preventDefault();
+      if (!cloudOk()) return;
+
       const dest = $('#destInput').value.trim();
       const dateRaw = $('#dateInput').value.trim();
       const remark = $('#remarkInput').value.trim();
+      const cityKey = $('#citySelect').value;
 
       // 校验
       let ok = true;
@@ -726,27 +862,48 @@
       $('#dateInput').classList.remove('error');
       if (!dest) { $('#destInput').classList.add('error'); ok = false; toast('请填写目的地'); }
       if (!dateRaw) { $('#dateInput').classList.add('error'); ok = false; toast('请选择出行时间'); }
+      if (!cityKey) { ok = false; toast('请选择出行城市'); }
       if (!ok) return;
 
+      // 切城市必须在建房之前：候选集合点、地名解析范围都挂在"当前城市"上
+      applyCity(cityKey);
+      const city = currentCity();
+
+      state.cityKey = cityKey;
+      state.cityName = city.name;
+      state.cityCode = city.adcode;
       state.dest = dest;
       state.dateRaw = dateRaw;
       state.date = formatDate(dateRaw);
       state.remark = remark;
-      state.inviteCode = generateCode();
-      state.isOwner = true;   // 创建者 = 发起人视角
+      state.isOwner = true;
       state.full = false;
+      state.planReady = false;
 
-      // 模拟初始成员：本用户 + 2 位待填写伙伴
-      state.members = [
-        { name: '我', filled: false, isMe: true },
-        { name: '张三', filled: false, isMe: false },
-        { name: '李四', filled: false, isMe: false }
-      ];
+      const btn = createForm.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      btn.textContent = '正在创建房间…';
 
-      // 展示邀请码
-      $('#inviteCode').textContent = state.inviteCode;
-      $('#inviteBox').classList.add('show');
-      toast('房间创建成功，邀请码已生成');
+      Cloud.createRoom({
+        cityCode: city.adcode,
+        cityName: city.name,
+        dest: dest,
+        meetStart: dateRaw,
+        meetEnd: null
+      }).then(r => {
+        state.inviteCode = r.code;
+        state.members = [];          // 真房间从空开始，等人进来（不再塞张三李四假成员）
+        $('#inviteCode').textContent = r.code;
+        $('#inviteBox').classList.add('show');
+        persistRoom();
+        toast('房间创建成功，邀请码 ' + r.code);
+      }).catch(err => {
+        toast(err.message || '房间创建失败，请重试');
+        state.inviteCode = '';
+      }).then(() => {
+        btn.disabled = false;
+        btn.textContent = '创建房间 · 生成邀请码';
+      });
     });
 
     $('#copyCode').addEventListener('click', async () => {
@@ -777,29 +934,78 @@
     $('#joinCode').addEventListener('input', e => {
       e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     });
+    // 加入房间时把本机城市切到房间城市：本机预置列表里有就切过去；
+    // 没有就后台联网把这个城市补进来（房间可能是别人用自定义城市建的）。
+    // 成员端不算方案（方案由发起人算好放云端），这里主要是让地名提示对得上。
+    function restoreCityForJoin(cityName, cityCode) {
+      const list = getCityList();
+      for (let i = 0; i < list.length; i++) {
+        if (String(list[i].adcode) === String(cityCode) || list[i].name === cityName) {
+          applyCity(list[i].key);
+          state.cityKey = list[i].key;
+          return true;
+        }
+      }
+      state.cityKey = '';
+      // 后台补城市，失败也不影响加入房间
+      if (typeof prepareOnlineCity === 'function' && cityName) {
+        prepareOnlineCity(cityName).then(city => {
+          const c = addCustomCity(city);
+          applyCity(c.key);
+          state.cityKey = c.key;
+        }).catch(() => { /* 联网失败就算了，不影响看方案 */ });
+      }
+      return false;
+    }
+
     $('#joinForm').addEventListener('submit', e => {
       e.preventDefault();
+      if (!cloudOk()) return;
       const code = $('#joinCode').value.trim().toUpperCase();
       if (!code) { toast('请输入邀请码'); return; }
       if (!/^[A-Z0-9]{6}$/.test(code)) { toast('邀请码格式错误，请确认是 6 位字母或数字'); return; }
 
-      state.inviteCode = code;
-      state.dest = '杭州西湖 · 绍兴古城';
-      state.dateRaw = '';
-      state.date = '2026-11-22  周六 09:30';
-      state.isOwner = false;  // 通过邀请码加入 = 普通成员视角
-      state.full = false;
-      state.members = [
-        { name: '张三', filled: true, isMe: false },
-        { name: '我', filled: false, isMe: true },
-        { name: '李四', filled: false, isMe: false }
-      ];
+      const btn = $('#joinForm').querySelector('button[type="submit"]');
+      btn.disabled = true;
+      btn.textContent = '正在查找房间…';
 
-      closeModal('join-modal');
-      $('#joinCode').value = '';
-      resetPersonForm();  // 加入后填写个人信息：不残留上一次流程的姓名/城市
-      toast('已加入房间，开始填写个人信息');
-      showView('person');
+      Cloud.getRoom(code).then(r => {
+        if (r.expired) throw new Error('这个房间已超过 7 天，数据已清理，请让发起人重新创建');
+        const room = r.room;
+
+        state.inviteCode = room.code;
+        state.dest = room.dest || '';
+        state.dateRaw = room.meet_start || '';
+        state.date = formatDate(room.meet_start) || '时间待定';
+        state.cityCode = room.city_code || '';
+        state.cityName = room.city_name || '';
+        state.isOwner = r.isOwner;          // 自己建的房间再输码进来，仍是发起人视角
+        state.full = false;
+        state.planReady = !!(room.plan && room.status === 'ready');
+        state.members = (r.members || []).map(m => mapCloudMember(m, Cloud.deviceToken()));
+
+        restoreCityForJoin(room.city_name, room.city_code);
+        persistRoom();
+
+        // 已经填过信息的人（换手机/清缓存后重新进来）直接回房间，不用重填
+        const mine = state.members.filter(m => m.isMe)[0];
+        closeModal('join-modal');
+        $('#joinCode').value = '';
+        if (mine && mine.filled) {
+          toast('欢迎回来，房间信息已同步');
+          renderRoom();
+          showView('room');
+        } else {
+          resetPersonForm();   // 不残留上一次流程的姓名/城市
+          toast('已加入房间，请填写你的出发信息');
+          showView('person');
+        }
+      }).catch(err => {
+        toast(err.message || '加入失败，请确认邀请码');
+      }).then(() => {
+        btn.disabled = false;
+        btn.textContent = '确认加入';
+      });
     });
 
     // ==========================================================
@@ -823,9 +1029,12 @@
     const personForm = $('#personForm');
     personForm.addEventListener('submit', e => {
       e.preventDefault();
+      if (!cloudOk()) return;
+      if (!state.inviteCode) { toast('还没有房间，请先创建或加入房间'); showView('cover'); return; }
+
       const from = $('#fromInput').value.trim();
       const window_ = $('#windowInput').value.trim();
-      const budget = $('#budgetInput').value.trim();
+      const budgetRaw = $('#budgetInput').value.trim();
       const name = $('#nameInput').value.trim();
       const pref = prefHidden.value;
 
@@ -838,15 +1047,35 @@
       if (!window_) { $('#windowInput').classList.add('error'); toast('请填写可出发时间窗口'); ok = false; }
       if (!ok) return;
 
-      // 把"我"这个成员标记为已填写，并同步填写的姓名
-      const me = state.members.find(m => m.isMe);
-      if (me) { me.filled = true; delete me.isMePending; me.name = name; me.startFrom = from; me.pref = pref; me.window = window_; me.budget = budget; }
-      else {
-        state.members.unshift({ name, filled: true, isMe: true, startFrom: from, pref, window: window_, budget });
-      }
+      // 偏好可多选，原样存成逗号串（算方案时取第一个当主方式）；预算是自由文本，抠出数字
+      const modes = pref ? pref.split(',').filter(Boolean) : ['transit'];
+      const budgetNum = parseFloat(String(budgetRaw).replace(/[^\d.]/g, '')) || 0;
 
-      showView('room');
-      renderRoom();
+      const btn = personForm.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      btn.textContent = '正在提交…';
+
+      // 同一台设备重复提交 = 更新自己那一行，不会变成两个人（云端按 member_token 判重）
+      Cloud.joinRoom(state.inviteCode, {
+        name: name,
+        origin: from,
+        mode: modes.join(','),
+        budget: budgetNum,
+        winStart: window_,
+        winEnd: null
+      }).then(() => syncRoom(state.inviteCode))
+        .then(() => {
+          persistRoom();
+          renderRoom();
+          showView('room');
+          startPolling();          // 进房间就开轮询，别人填完这边能自动刷新
+          toast('信息已提交，等待其他伙伴');
+        })
+        .catch(err => toast(err.message || '提交失败，请重试'))
+        .then(() => {
+          btn.disabled = false;
+          btn.textContent = '完成填写 · 进入房间';
+        });
     });
 
     // ==========================================================
@@ -869,6 +1098,9 @@
       // 房间信息编辑态重置（编辑仅发起人可用，成员始终只读展示）
       $('#roomBrief').hidden = false;
       $('#roomEditForm').hidden = true;
+      // 原代码漏了这一行：编辑过一次后「编辑信息」按钮就永久消失了，这里补回来。
+      // 必须跟着角色走，否则普通成员也会看到编辑入口。
+      $('#editRoomBtn').hidden = !state.isOwner;
       $('#memberCount').textContent = state.members.length;
       $('#memberCount2').textContent = state.members.length;
 
@@ -917,12 +1149,12 @@
         options.forEach(o => o.classList.remove('disabled'));
       }
 
-      // 满员按钮与"查看方案"入口状态
+      // 生成按钮与"查看方案"入口状态：以云端是否已有方案为准（不是本地标记）
       const fb = $('#fullBtn');
-      if (state.full) { fb.disabled = true; fb.textContent = '已满员 ✓'; }
-      else { fb.disabled = false; fb.textContent = '标记已满员'; }
-      $('#viewPlanBtn').hidden = !state.full;
-      $('#viewPlanBtnM').hidden = !state.full;
+      if (state.planReady) { fb.disabled = true; fb.textContent = '方案已生成 ✓'; }
+      else { fb.disabled = false; fb.textContent = '生成出行方案'; }
+      $('#viewPlanBtn').hidden = !state.planReady;
+      $('#viewPlanBtnM').hidden = !state.planReady;
     }
 
     // 通用确认弹窗
@@ -955,12 +1187,27 @@
       const dateRaw = $('#editDate').value;
       if (!dest) { $('#editDest').classList.add('error'); toast('请填写目的地'); return; }
       if (!dateRaw) { $('#editDate').classList.add('error'); toast('请填写出行时间'); return; }
-      state.dest = dest;
-      state.dateRaw = dateRaw;
-      state.date = formatDate(dateRaw);
-      state.remark = $('#editRemark').value.trim();
-      renderRoom();
-      toast('房间信息已更新，成员端同步显示');
+
+      // 写云端，成员端轮询会同步。备注字段 rooms 表暂时没有列，只在本机保留
+      const wasReady = state.planReady;
+      Cloud.updateRoom(state.inviteCode, { dest: dest, meet_start: dateRaw })
+        .then(() => {
+          state.dest = dest;
+          state.dateRaw = dateRaw;
+          state.date = formatDate(dateRaw);
+          state.remark = $('#editRemark').value.trim();
+          // 目的地或时间变了，之前那份方案就作废了，状态改回 open 让发起人重新生成
+          if (wasReady) {
+            state.planReady = false;
+            state.full = false;
+            return Cloud.reopenPlan(state.inviteCode);
+          }
+        })
+        .then(() => {
+          renderRoom();
+          toast(wasReady ? '房间信息已更新，原方案已作废，请重新生成' : '房间信息已更新，成员端会同步');
+        })
+        .catch(err => toast(err.message || '保存失败，请重试'));
     });
 
     // 添加成员：弹窗填昵称（必填）+ 出发地（选填）
@@ -973,43 +1220,126 @@
     });
     $('#addMemberForm').addEventListener('submit', e => {
       e.preventDefault();
+      if (!cloudOk()) return;
       const name = $('#memberNameInput').value.trim();
       const from = $('#memberFromInput').value.trim();
       if (!name) { $('#memberNameInput').classList.add('error'); toast('请填写成员昵称'); return; }
-      state.members.push({ name, filled: false, isMe: false, startFrom: from, manual: true });
-      closeModal('addMemberModal');
-      renderRoom();
-      toast('已添加成员：' + name);
+
+      const btn = $('#addMemberForm').querySelector('button[type="submit"]');
+      btn.disabled = true;
+      // 代填：给一个临时令牌，否则会覆盖发起人自己那一行
+      const proxyToken = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      Cloud.joinRoom(state.inviteCode, {
+        name: name, origin: from, mode: 'transit', budget: 0, winStart: null, winEnd: null
+      }, proxyToken).then(() => syncRoom(state.inviteCode))
+        .then(() => {
+          closeModal('addMemberModal');
+          renderRoom();
+          toast('已添加成员：' + name + (from ? '' : '，还需补出发地'));
+        })
+        .catch(err => toast(err.message || '添加失败，请重试'))
+        .then(() => { btn.disabled = false; });
     });
 
-    // 删除成员：确认后从列表移除（前端模拟，刷新重置）
+    // 删除成员：云端软删（只打 removed_at 时间戳，不真删行，便于事后核对）
     $('#membersList').addEventListener('click', e => {
       const btn = e.target.closest('.member-del');
       if (!btn) return;
       const i = Number(btn.dataset.del);
       const m = state.members[i];
-      if (!m) return;
-      openConfirm('确认删除成员「' + m.name + '」？删除后该卡片将移出列表。', () => {
-        state.members.splice(i, 1);
-        renderRoom();
-        toast('已删除成员');
+      if (!m || !m.id) return;
+      openConfirm('确认把「' + m.name + '」移出房间？他填过的信息会一并失效，但本人仍可用邀请码重新加入。', () => {
+        Cloud.removeMember(state.inviteCode, m.id)
+          .then(() => syncRoom(state.inviteCode))
+          .then(() => { renderRoom(); toast('已移出房间'); })
+          .catch(err => toast(err.message || '移除失败，请重试'));
       });
     });
 
-    // 标记已满员：确认后按房间当前数据即时生成出行方案并进入结果视图
+    // 标记已满员 → 真算三套方案 → 结果存云端 → 所有人可见
     const PLAN_NAMES = { direct: '全部直达', allMeet: '全员汇合', partial: '部分汇合' };
+
+    // 时间窗口是自由文本「周六 08:00 – 10:00」，引擎要 HH:MM 数组，这里抠出来
+    function parseWindow(text) {
+      const found = String(text || '').match(/\d{1,2}[:：]\d{2}/g);
+      const norm = s => {
+        const p = s.split(/[:：]/);
+        return String(p[0]).padStart(2, '0') + ':' + p[1];
+      };
+      if (found && found.length >= 2) return [norm(found[0]), norm(found[1])];
+      return ['08:00', '09:30'];   // 没写清楚就按早高峰默认，不阻塞生成
+    }
+
+    // 页面成员对象 → 引擎成员对象（字段名与取值口径都不同）
+    function toEngineMember(m) {
+      const modes = (m.pref || 'transit').split(',').filter(Boolean);
+      // 偏好可多选，引擎只认单一方式，按第一个算
+      const mode = ['transit', 'taxi', 'bike'].indexOf(modes[0]) >= 0 ? modes[0] : 'transit';
+      return {
+        name: m.name,
+        origin: m.startFrom,
+        mode: mode,
+        budget: parseFloat(String(m.budget).replace(/[^\d.]/g, '')) || 0,
+        window: parseWindow(m.window)
+      };
+    }
+
+    function doGenerate() {
+      const btn = $('#fullBtn');
+      const oldText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '正在解析出发地…';
+      applyCity(state.cityKey);   // 引擎按"当前城市"解析地名，这里必须切回去
+
+      const membersForEngine = state.members.map(toEngineMember);
+
+      generateSchemes(membersForEngine, state.dest, {
+        onStage: s => { btn.textContent = s; }
+      }).then(result => {
+        const payload = {
+          dest: state.dest,
+          city: state.cityName || currentCity().name,
+          members: membersForEngine,
+          result: result
+        };
+        localStorage.setItem('jbx_result', JSON.stringify(payload));   // 本机先落地，result.html 立刻能读
+        return Cloud.savePlan(state.inviteCode, {
+          jbx: payload,
+          cityKey: state.cityKey,
+          cityName: state.cityName,
+          by: Cloud.deviceToken(),
+          at: new Date().toISOString()
+        });
+      }).then(r => {
+        state.full = true;
+        state.planReady = true;
+        if (r && r.reused) toast('方案已存在，直接读取');
+        renderRoom();
+        location.href = 'result.html';
+      }).catch(err => {
+        toast(err.message || '方案生成失败，请重试');
+      }).then(() => {
+        btn.disabled = false;
+        btn.textContent = state.planReady ? '方案已生成 ✓' : oldText;
+      });
+    }
+
     $('#fullBtn').addEventListener('click', () => {
       if (state.full) return;
-      openConfirm('确认生成出行方案？', () => {
-        state.full = true;
-        renderRoom();
-        buildPlan();
-        showView('plan');
-        toast('出行方案已生成');
-      });
+      if (!state.members.length) { toast('还没有成员加入，至少等一位伙伴填完再生成'); return; }
+      const pending = state.members.filter(m => !m.filled);
+      if (pending.length) {
+        toast('还有 ' + pending.length + ' 位伙伴没填出发地，等他们填完再生成');
+        return;
+      }
+      if (!state.cityKey) { toast('本机找不到房间城市，请回首页重新选城市后再建房'); return; }
+
+      openConfirm('确认按当前 ' + state.members.length + ' 位成员生成三套方案？生成后所有成员都能看到同一份结果。', doGenerate);
     });
 
-    // 出行方案视图：由房间信息 + 成员填写内容模拟计算（无外部数据）
+    // 【2026-11-14 已停用】方案不再在本页渲染：改由 engine.js 真算后跳 result.html，
+    // 地图（张宇桐）、对比表（闫雅欣）、数据提示都在那个页面。
+    // 这个函数保留原样，因为 plan 视图的 HTML 结构还在，断网时想单看版式可以手动调用。
     function buildPlan() {
       $('#planMeta').textContent = (state.dest || '——') + ' · ' + (state.date || '时间待定')
         + ' · ' + (PLAN_NAMES[state.selectedPlan] || '未选择汇合方式');
@@ -1053,8 +1383,9 @@
         list.appendChild(item);
       });
     }
-    $('#viewPlanBtn').addEventListener('click', () => { buildPlan(); showView('plan'); });
-    $('#viewPlanBtnM').addEventListener('click', () => { buildPlan(); showView('plan'); });
+    // 方案不再在本页渲染：跳 result.html（地图 / 对比表 / 数据提示三个模块都在那边）
+    $('#viewPlanBtn').addEventListener('click', openPlan);
+    $('#viewPlanBtnM').addEventListener('click', openPlan);
     $('#planBack').addEventListener('click', () => showView('room'));
 
     // 汇合方案点击
@@ -1065,8 +1396,9 @@
       state.selectedPlan = o.dataset.plan;
     }));
 
-    // ---- 日期默认值（创建房间时）----
+    // ---- 初始化 ----
     (function init() {
+      // 日期默认值（创建房间时）：7 天后 09:30
       const d = new Date();
       d.setDate(d.getDate() + 7);
       d.setHours(9, 30, 0, 0);
@@ -1074,6 +1406,24 @@
       const iso = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
       const el = $('#dateInput');
       if (el) el.value = iso;
+
+      // 城市下拉：预置城市 + 本机之前联网添加过的自定义城市
+      const citySel = $('#citySelect');
+      if (citySel && typeof getCityList === 'function') {
+        getCityList().forEach(c => {
+          const o = document.createElement('option');
+          o.value = c.key;
+          o.textContent = c.custom ? c.name + '（自定义）' : c.name;
+          citySel.appendChild(o);
+        });
+        citySel.value = currentCityKey();
+      }
+
+      // 有上次的房间就提一句，方便回到房间继续（不自动跳转，避免打断演示）
+      const last = readPersistedRoom();
+      if (last && last.code) {
+        setTimeout(() => toast('上次的房间 ' + last.code + ' 还在，输邀请码可回到房间'), 1200);
+      }
     })();
 
   })();
