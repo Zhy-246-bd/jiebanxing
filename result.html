@@ -47,11 +47,11 @@
 
   <script src="js/formats.js"></script>
   <script>
-    // 返回去向：在自己房间里的回房间页，单机演示的回录入页
+    // 返回去向：在房间里的回房间页，单机演示的回录入页（单机版已改名 demo.html）
     document.getElementById("backBtn").addEventListener("click", function () {
       var inRoom = false;
       try { inRoom = !!JSON.parse(localStorage.getItem("jbx_room_local") || "null"); } catch (e) { /* 数据坏了当没有 */ }
-      location.href = inRoom ? "index1.html" : "index.html";
+      location.href = inRoom ? "index1.html" : "demo.html";
     });
 
     var data = JSON.parse(localStorage.getItem("jbx_result") || "null");
