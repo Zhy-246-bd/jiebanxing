@@ -417,7 +417,7 @@ function inputTips(keyword, city) {
   var url = "https://restapi.amap.com/v3/assistant/inputtips?keywords=" +
     encodeURIComponent(keyword) + "&city=" + encodeURIComponent(c) +
     "&citylimit=true" + "&key=" + AMAP_KEY;
-  return _fetchJson(url).then(function (r) {
+  return _fetchJson(url, 1).then(function (r) {      // 联想只重试 1 次，打字等待不能太久
     var tips = (r && r.tips || []).filter(function (t) {
       return t && t.name && typeof t.location === "string" && t.location.indexOf(",") > 0;
     }).slice(0, 8).map(function (t) {
@@ -432,7 +432,13 @@ function inputTips(keyword, city) {
     }).filter(function (t) { return isFinite(t.lng) && isFinite(t.lat); });
     _cacheSet(_tipsCache, ck, tips, 5 * 60 * 1000);               // 联想结果 5 分钟缓存
     return tips;
-  }).catch(function () { return []; });
+  }).catch(function (e) {
+    /* 失败必须让调用方知道：否则用户看到的"没有匹配"会被误当成"这个地名查不到"，
+       而实际是网络/限频问题。调用方据此显示"联想暂不可用"。 */
+    var err = new Error((e && e.message) || "联想请求失败");
+    err.tipsFailed = true;
+    throw err;
+  });
 }
 
 /**

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>结伴行 · 方案结果</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=1115b">
 </head>
 <body class="result-page">
   <div class="page">
@@ -63,10 +63,10 @@
 
   <!-- 本地 Key（不进仓库）：文件不存在时静默跳过，页面照常跑，只是地图显示配置指引。
        新拉代码的人：复制 js/config.example.js 为 js/config.local.js，填入 __AMAP_JS_KEY__ 与 __AMAP_JS_CODE__。 -->
-  <script src="js/config.local.js"
+  <script src="js/config.local.js?v=1115b"
           onerror="console.info('%c[结伴行] 未找到 js/config.local.js，地图不可用。复制 js/config.example.js 为 config.local.js 并填入 JS Key 与安全密钥。','color:#e67e22')"></script>
 
-  <script src="js/formats.js"></script>
+  <script src="js/formats.js?v=1115b"></script>
   <script>
     // 返回去向：在房间里的回房间页，单机演示的回录入页（单机版已改名 demo.html）
     document.getElementById("backBtn").addEventListener("click", function () {
@@ -110,8 +110,8 @@
       box.appendChild(card);
     });
   </script>
-  <script src="js/compare-table.js"></script>
-  <script src="js/data-hint.js"></script>
-  <script src="js/map-view.js"></script>
+  <script src="js/compare-table.js?v=1115b"></script>
+  <script src="js/data-hint.js?v=1115b"></script>
+  <script src="js/map-view.js?v=1115b"></script>
 </body>
 </html>

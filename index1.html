@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>结伴行 · 短途结伴出游</title>
-  <link rel="stylesheet" href="css/style1.css">
+  <link rel="stylesheet" href="css/style1.css?v=1115b">
 </head>
 <body class="home">
 
@@ -610,15 +610,15 @@
          · cloud-config.js/cloud-api.js —— 房间、成员、方案快照读写
        文件缺失时页面照常打开，只是相关按钮会给出提示，不会白屏。
        ============================================================ -->
-  <script src="js/config.local.js"
+  <script src="js/config.local.js?v=1115b"
           onerror="console.info('%c[结伴行] 未找到 js/config.local.js，本次将使用本地估算数据。','color:#e67e22')"></script>
-  <script src="js/formats.js"></script>
-  <script src="js/amap-api.js"></script>
-  <script src="js/cities.js"></script>
-  <script src="js/city-online.js"></script>
-  <script src="js/engine.js"></script>
-  <script src="js/cloud-config.js"></script>
-  <script src="js/cloud-api.js"></script>
+  <script src="js/formats.js?v=1115b"></script>
+  <script src="js/amap-api.js?v=1115b"></script>
+  <script src="js/cities.js?v=1115b"></script>
+  <script src="js/city-online.js?v=1115b"></script>
+  <script src="js/engine.js?v=1115b"></script>
+  <script src="js/cloud-config.js?v=1115b"></script>
+  <script src="js/cloud-api.js?v=1115b"></script>
 
   <script>
   /* ==========================================================
@@ -875,6 +875,12 @@
       applyCity(cityKey);
       const city = currentCity();
 
+      // 目的地若从联想里选过，把精确坐标按"切城市之后"的缓存 key 写进去
+      // （seedCoord 的 key 带城市前缀，必须在 applyCity 之后调用）
+      if (pickedDest && typeof seedCoord === 'function') {
+        seedCoord(dest, pickedDest.lng, pickedDest.lat, pickedDest.adcode || city.adcode);
+      }
+
       state.cityKey = cityKey;
       state.cityName = city.name;
       state.cityCode = city.adcode;
@@ -1083,6 +1089,12 @@
               box.appendChild(b);
             });
             box.hidden = false;
+          }).catch(err => {
+            // 请求失败和"查不到"要分开说，否则用户以为是地名的问题，实际是网络
+            if (input.value.trim() !== kw) return;
+            box.innerHTML = '<div class="empty">联想暂不可用（' +
+              ((err && err.message) || '网络异常').slice(0, 40) + '），可直接输入地名</div>';
+            box.hidden = false;
           });
         }, 350);
       });
@@ -1094,6 +1106,12 @@
 
     let pickedMemberFrom = null;    // 发起人代填成员的精确坐标
     attachTips($('#memberFromInput'), t => { pickedMemberFrom = t ? { lng: t.lng, lat: t.lat } : null; });
+
+    // 目的地也接联想：终点坐标同样决定整条路线，手打一样会偏
+    // 选中即 seedCoord 注入本机解析缓存（发起人在本机生成方案，不需要上云）
+    let pickedDest = null;
+    attachTips($('#destInput'), t => { pickedDest = t ? { lng: t.lng, lat: t.lat, adcode: t.adcode } : null; });
+    attachTips($('#editDest'), t => { pickedDest = t ? { lng: t.lng, lat: t.lat, adcode: t.adcode } : null; });
 
     const personForm = $('#personForm');
     personForm.addEventListener('submit', e => {
@@ -1242,6 +1260,7 @@
     // 房间公共信息编辑（仅发起人；保存后模拟成员端同步最新信息）
     $('#editRoomBtn').addEventListener('click', () => {
       $('#editDest').value = state.dest || '';
+      pickedDest = null;               // 值来自云端文本，没有选点坐标
       $('#editDate').value = state.dateRaw || '';
       $('#editRemark').value = state.remark || '';
       $('#editDest').classList.remove('error');
@@ -1257,6 +1276,11 @@
       const dateRaw = $('#editDate').value;
       if (!dest) { $('#editDest').classList.add('error'); toast('请填写目的地'); return; }
       if (!dateRaw) { $('#editDate').classList.add('error'); toast('请填写出行时间'); return; }
+
+      // 目的地重新选过点就更新精确坐标，否则沿用文本解析
+      if (pickedDest && typeof seedCoord === 'function') {
+        seedCoord(dest, pickedDest.lng, pickedDest.lat, pickedDest.adcode || state.cityCode);
+      }
 
       // 写云端，成员端轮询会同步。备注字段 rooms 表暂时没有列，只在本机保留
       const wasReady = state.planReady;
@@ -1501,6 +1525,10 @@
 
   })();
   </script>
+
+  <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
+       极淡、不挡点击，答辩前留着也无妨。 -->
+  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1115b</div>
 
 </body>
 </html>
