@@ -202,7 +202,17 @@ function case4() {
 
     var s = rCost.schemes[0];
     ok(s.scoreDetail && typeof s.scoreDetail.totalCost === "number", "scoreDetail 拆出了四个分项");
-    ok(Math.abs(s.scoreDetail.totalCost - s.score) < 0.11, "纯费用权重下，得分几乎等于费用分项");
+    ok(s.score === 100, "1-100 分制：费用最小的方案得满分 100（实际 " + s.score + "）");
+    ok(rCost.schemes.every(function (x) { return x.score >= 60 && x.score <= 100; }),
+      "所有方案得分都落在 60~100 区间");
+
+    /* 排序方向：score 越高越优，降序排列，第一位就是最高分 */
+    var sortedDesc = rCost.schemes.every(function (x, i, arr) {
+      return i === 0 || arr[i - 1].score >= x.score;
+    });
+    ok(sortedDesc, "方案按得分降序排列（分高在前）");
+    ok(rCost.schemes[0].score >= rCost.schemes[rCost.schemes.length - 1].score,
+      "第一名分数不低于最后一名");
 
     return generateSchemes(ms, "目的地", { weights: WEIGHT_PRESETS.comfort });
   }).then(function (rComfort) {

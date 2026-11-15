@@ -236,7 +236,7 @@
     </div>
 
     <div class="cover-center">
-      <p class="cover-eyebrow">Travel Together</p>
+      <p class="cover-eyebrow">Journey Together</p>
       <!-- ============================================================
            【2026-11-13 修改注明 · 本文件为新修改文件 index1.html】
            原始未改动文件：index.html（配套原始样式 css/style.css）
@@ -428,13 +428,12 @@
           </div>
 
           <div class="field">
-            <label>出行偏好（可多选）</label>
-            <div class="pref-group" id="prefGroup">
-              <button type="button" class="pref-chip" data-pref="transit">地铁 / 公交</button>
-              <button type="button" class="pref-chip" data-pref="taxi">打车</button>
-              <button type="button" class="pref-chip" data-pref="bike">骑行</button>
-            </div>
-            <input type="hidden" id="prefHidden" name="pref" value="">
+            <label for="prefHidden">出行方式</label>
+            <!-- 沿用原 id，现有 JS 仍通过 #prefHidden.value 读取，无需改动脚本 -->
+            <input id="prefHidden" name="pref" type="text" autocomplete="off"
+                   placeholder="例如“自驾、公交、骑行等，可自行填写”">
+            <!-- 预设选项已移除；保留空容器，兼容现有 JS 的事件绑定 -->
+            <div class="pref-group" id="prefGroup" hidden></div>
           </div>
 
           <div class="field">
@@ -462,6 +461,10 @@
       <header class="page-head">
         <h2>结伴房间<span class="role-chip owner-only" hidden>发起人</span><span class="role-chip member-only" hidden>普通成员</span></h2>
         <p id="roomMeta">——</p>
+        <!-- 房间有效期提示：房间数据 7 天后清理，天数由外部 JS 填入 #expireDays -->
+        <p class="tip-expire">房间有效期：剩余<b class="tip-expire-num" id="expireDays">—</b>天</p>
+        <!-- 断网 / 同步失败提示条：默认隐藏，由外部 JS 控制显示隐藏 -->
+        <div class="offline-tip" id="offlineTip" hidden>当前离线，正在重试</div>
       </header>
 
       <article class="card">
@@ -494,42 +497,38 @@
           <button type="button" class="mini-btn owner-only" id="addMemberBtn" hidden>＋ 添加成员</button>
         </div>
         <div class="members" id="membersList"></div>
+        <!-- 成员列表空状态：默认隐藏，由外部 JS 控制显示隐藏 -->
+        <p class="empty-tip" id="memberEmptyTip" hidden>把邀请码发给伙伴，他们填完个人信息就会出现在这里。</p>
       </article>
 
       <article class="card">
         <div class="card-head">
           <h3>汇合方案</h3>
-          <span class="num">04</span>
         </div>
         <div class="confluence-wrap" id="confluenceWrap">
-          <div class="confluence-options">
-            <button type="button" class="confluence-option" data-plan="direct">
-              <div class="title">全部直达</div>
-              <div class="sub">各走各的，终点汇合</div>
-            </button>
-            <button type="button" class="confluence-option" data-plan="allMeet">
-              <div class="title">全员汇合</div>
-              <div class="sub">先在集合点碰面再一起走</div>
-            </button>
-            <button type="button" class="confluence-option" data-plan="partial">
-              <div class="title">部分汇合</div>
-              <div class="sub">顺路的人先凑一队</div>
-            </button>
-          </div>
           <div class="confluence-masked" id="confluenceMask" hidden>
             <div class="mask-text">还有成员尚未填写个人出行信息，请等待。</div>
           </div>
+          <!-- 等待发起人生成方案：默认显示，由外部 JS 控制显示隐藏 -->
+          <p class="plan-wait-tip" id="planWaitTip">等待发起人生成出行方案</p>
         </div>
       </article>
 
       <div class="actions-bar">
         <p class="hint">
-          <span class="member-only" hidden>发起人确认满员后，可在此查看出行方案。</span>
-          <span class="owner-only" hidden>点击「标记已满员」确认后将立即生成本房间的出行方案。</span>
+          <span class="owner-only" hidden>点击「生成出行方案」后将立即计算，全体成员都可查看。</span>
         </p>
         <button type="button" class="btn btn-ghost owner-only" id="viewPlanBtn" hidden>查看出行方案</button>
         <button type="button" class="btn btn-primary owner-only" id="fullBtn" hidden>标记已满员</button>
         <button type="button" class="btn btn-primary member-only" id="viewPlanBtnM" hidden>查看出行方案</button>
+      </div>
+
+      <!-- 生成方案等待浮层：仅由 #fullBtn 的禁用态通过 CSS 自动显示/隐藏，不接入业务 JS -->
+      <div class="gen-loading" role="status" aria-live="polite">
+        <div class="gen-loading-card">
+          <span class="gen-loading-spinner" aria-hidden="true"></span>
+          <p>正在为你计算最优汇合方案，请稍候...</p>
+        </div>
       </div>
     </div>
   </section>
@@ -565,11 +564,11 @@
     </div>
   </section>
 
-  <!-- 添加成员弹窗（前端模拟，不入库） -->
+  <!-- 添加成员弹窗（写入云端，其他成员可见） -->
   <div class="modal-mask" id="addMemberModal" role="dialog" aria-modal="true" aria-label="添加成员">
     <div class="modal">
       <h3>添加成员</h3>
-      <p class="sub-hint">手动补充一位同行伙伴（前端模拟，刷新后重置）</p>
+      <p class="sub-hint">手动补充一位同行伙伴（会同步到房间，其他成员可见）</p>
       <form id="addMemberForm" novalidate>
         <div class="field">
           <label>成员姓名 *</label>

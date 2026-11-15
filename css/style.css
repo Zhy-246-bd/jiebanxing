@@ -97,3 +97,490 @@ body {
 .hint { font-size: 11px; color: var(--text-sub); margin-top: 8px; }
 .hint-ok { color: #2e7d32; }
 .hint-err { color: #c62828; }
+
+
+
+/* ============================================================
+ * 结果页重构（result.html）· 与封面、房间页统一视觉语言
+ * 只做布局与样式，不动任何渲染 JS；所有规则都限定在 body.result-page
+ * 内，避免影响 demo.html 等复用 style.css 的页面。
+ * ============================================================ */
+body.result-page {
+  background: #FCFAF7;
+  color: #3A4249;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+body.result-page .page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 28px 28px 64px;
+}
+
+/* 页头：左对齐、细分割线，和房间页同一语气 */
+body.result-page .header {
+  text-align: left;
+  padding: 8px 2px 20px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid rgba(135, 168, 188, .16);
+}
+body.result-page .header .eyebrow {
+  font-size: 10.5px;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: rgba(58, 66, 73, .4);
+  margin-bottom: 8px;
+}
+body.result-page .header h1 {
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: .22em;
+  text-indent: .22em;
+  color: #3A4249;
+}
+body.result-page .header #subtitle {
+  font-size: 12.5px;
+  color: rgba(58, 66, 73, .6);
+  line-height: 1.7;
+  margin-top: 8px;
+  letter-spacing: .03em;
+}
+
+/* ---------- 地图：页面主体，占最大面积 ---------- */
+body.result-page #mapBox {
+  position: relative;
+  margin-top: 0;
+  padding: 16px;
+  border: 1px solid rgba(135, 168, 188, .18);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 20px 44px rgba(135, 168, 188, .12);
+}
+body.result-page #mapTabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+body.result-page .jbx-tab {
+  flex: 1;
+  padding: 9px 0;
+  border: none;
+  border-radius: 999px;
+  background: #F4F1E9;
+  color: rgba(58, 66, 73, .6);
+  font-size: 13px;
+  letter-spacing: .04em;
+  cursor: pointer;
+  transition: background .25s, color .25s;
+}
+body.result-page .jbx-tab.on {
+  background: #87A8BC;
+  color: #fff;
+  font-weight: 600;
+}
+/* 覆盖 map-view.js 注入的 340px，让地图撑起页面；节点 id 保持不变 */
+body.result-page #mapBox #mapArea {
+  height: clamp(360px, 58vh, 640px);
+  border-radius: 18px;
+  overflow: hidden;
+  background: #F4F1E9;
+}
+body.result-page #mapHint {
+  margin-top: 10px;
+  min-height: 14px;
+  font-size: 11.5px;
+  letter-spacing: .03em;
+  color: rgba(58, 66, 73, .55);
+  text-align: center;
+}
+/* 路线加粗：覆盖 AMap 生成的 SVG 折线（若走 canvas 渲染则此规则不生效，不影响功能） */
+body.result-page #mapBox #mapArea path[stroke-width="4"] {
+  stroke-width: 6 !important;
+}
+/* 图例浮在地图右下角，避免挤压地图高度 */
+body.result-page .jbx-legend {
+  position: absolute;
+  right: 28px;
+  bottom: 84px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 6px;
+  max-width: 220px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(135, 168, 188, .18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 8px 20px rgba(58, 66, 73, .12);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: rgba(58, 66, 73, .55);
+  backdrop-filter: blur(4px);
+}
+body.result-page .jbx-legend i {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+body.result-page .jbx-legend .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+body.result-page .jbx-map-note {
+  padding: 64px 24px;
+  font-size: 13px;
+  line-height: 2;
+  color: rgba(58, 66, 73, .6);
+  text-align: center;
+}
+body.result-page .jbx-map-note b { color: #3A4249; }
+body.result-page .jbx-map-note .k {
+  background: #F4F1E9;
+  border-radius: 6px;
+  color: #5B7E92;
+}
+
+/* ---------- 方案：地图下方的横向三卡 ---------- */
+body.result-page .scheme-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 30px 2px 14px;
+}
+body.result-page .scheme-head h2 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  color: #3A4249;
+}
+body.result-page .scheme-head span {
+  font-size: 11.5px;
+  color: rgba(58, 66, 73, .5);
+  letter-spacing: .04em;
+}
+/* 三种走法的简短说明：静态文案，不依赖方案排序 */
+body.result-page .scheme-guide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 2px 16px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: rgba(58, 66, 73, .52);
+}
+body.result-page .scheme-guide span {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(244, 241, 233, .7);
+  letter-spacing: .02em;
+}
+body.result-page .scheme-guide b {
+  margin-right: 6px;
+  color: rgba(58, 66, 73, .78);
+  font-weight: 600;
+}
+/* 方案来源与出行方式说明：正常正文，不用小字注释 */
+body.result-page .scheme-caption {
+  margin: 0 2px 18px;
+  font-size: 14px;
+  line-height: 1.8;
+  letter-spacing: .01em;
+  color: #55656F;
+}
+/* 算法没有算出可行方案时，说明条也一起收起，只留兜底提示 */
+body.result-page:has(#schemeList:empty) .scheme-guide { display: none; }
+
+body.result-page #schemeList {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+/* 算法没有算出可行方案时的友好兜底：JS 不追加卡片时自动出现 */
+body.result-page #schemeList:empty::after {
+  content: "暂时无法生成可行汇合方案，请调整出发地点或时间";
+  grid-column: 1 / -1;
+  display: block;
+  padding: 38px 24px;
+  border: 1px solid rgba(135, 168, 188, .18);
+  border-radius: 20px;
+  background: rgba(244, 241, 233, .5);
+  font-size: 13px;
+  line-height: 1.8;
+  letter-spacing: .03em;
+  color: rgba(58, 66, 73, .62);
+  text-align: center;
+}
+body.result-page .scheme-card {
+  position: relative;
+  margin-top: 0;
+  padding: 20px 20px 18px;
+  border: 1px solid rgba(135, 168, 188, .2);
+  border-top: 1px solid rgba(135, 168, 188, .2);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 10px 26px rgba(135, 168, 188, .08);
+  cursor: pointer;
+  transition: transform .25s, box-shadow .25s, border-color .25s, background .25s;
+}
+body.result-page .scheme-card.best {
+  background: #FBF8F1;
+  border-color: rgba(230, 159, 102, .42);
+}
+body.result-page .scheme-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 36px rgba(135, 168, 188, .14);
+}
+/* 选中态：JS 只需给卡片加 .is-selected 或 aria-selected="true" */
+body.result-page .scheme-card.is-selected,
+body.result-page .scheme-card[aria-selected="true"] {
+  border-color: #87A8BC;
+  background: #fff;
+  box-shadow: 0 18px 38px rgba(135, 168, 188, .2);
+  transform: translateY(-2px);
+}
+body.result-page .scheme-score {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  float: none;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #F4F1E9;
+  color: #5B7E92;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+body.result-page .scheme-rank {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #F4F1E9;
+  color: rgba(58, 66, 73, .55);
+  font-size: 11px;
+}
+body.result-page .scheme-rank.best {
+  background: rgba(230, 159, 102, .16);
+  color: #C07A44;
+  font-weight: 600;
+}
+body.result-page .scheme-card h2 {
+  margin: 12px 0 8px;
+  padding-right: 72px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  color: #3A4249;
+}
+body.result-page .conclusion {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: rgba(58, 66, 73, .62);
+}
+body.result-page .metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+body.result-page .metric {
+  padding: 9px 8px;
+  border-radius: 12px;
+  background: #F8F6F1;
+  text-align: center;
+}
+body.result-page .metric b {
+  display: block;
+  font-size: 15px;
+  color: #3A4249;
+}
+body.result-page .metric span {
+  font-size: 10.5px;
+  color: rgba(58, 66, 73, .5);
+}
+body.result-page .leg {
+  margin-top: 6px;
+  padding: 9px 11px;
+  border-top: 0;
+  border-radius: 10px;
+  background: #FAF8F3;
+  font-size: 12px;
+  line-height: 1.7;
+  color: rgba(58, 66, 73, .6);
+}
+body.result-page .leg b {
+  color: #3A4249;
+  font-weight: 600;
+}
+body.result-page .bottleneck-tag {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #FBEEEA;
+  color: #B4533A;
+  font-size: 0;
+}
+/* 术语口语化：卡片里的「瓶颈成员」→「最晚抵达成员」（纯 CSS 替换，不改 JS） */
+body.result-page .bottleneck-tag::before {
+  content: "最晚抵达成员";
+  font-size: 10.5px;
+}
+
+/* 选中后的操作条（默认 hidden，显示由 JS 控制） */
+body.result-page .plan-pick-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 16px 22px;
+  border: 1px solid rgba(135, 168, 188, .22);
+  border-radius: 18px;
+  background: rgba(135, 168, 188, .12);
+}
+body.result-page .plan-pick-bar[hidden] { display: none; }
+body.result-page .plan-pick-bar p {
+  font-size: 13px;
+  letter-spacing: .03em;
+  color: #3A4249;
+}
+body.result-page .plan-pick-bar .btn {
+  display: inline-flex;
+  width: auto;
+  margin-top: 0;
+  padding: 11px 26px;
+  border-radius: 999px;
+  background: #87A8BC;
+  color: #fff;
+  font-size: 14px;
+  letter-spacing: .06em;
+}
+
+/* ---------- 对比表：跟随同一套配色 ---------- */
+body.result-page .jbx-ct-block { margin-top: 34px; }
+body.result-page .jbx-ct-title {
+  font-size: 15px;
+  letter-spacing: .06em;
+  color: #3A4249;
+}
+body.result-page .jbx-ct-wrap {
+  border: 1px solid rgba(135, 168, 188, .2);
+  border-radius: 18px;
+  box-shadow: 0 10px 26px rgba(135, 168, 188, .08);
+}
+body.result-page .jbx-ct-wrap th { background: #87A8BC; }
+/* 综合得分改为 0-100 后可能变成三位数，等宽数字保证列不跳动 */
+body.result-page .jbx-ct-wrap th,
+body.result-page .jbx-ct-wrap td { font-variant-numeric: tabular-nums; }
+body.result-page .jbx-ct-wrap td { border-top-color: rgba(135, 168, 188, .12); }
+body.result-page .jbx-ct-wrap tbody tr:nth-child(even) td { background: #FBF9F4; }
+body.result-page .jbx-ct-min {
+  background: rgba(135, 168, 188, .16) !important;
+  color: #4F7286 !important;
+}
+/* 综合得分越高越优：只高亮推荐方案（首行）的得分，去掉 JS 按“最小值”误标的其余行 */
+body.result-page .jbx-ct-wrap tbody tr:not(:first-child) td:nth-child(6).jbx-ct-min {
+  background: #FFF !important;
+  color: inherit !important;
+}
+body.result-page .jbx-ct-wrap tbody tr:not(:first-child):nth-child(even) td:nth-child(6).jbx-ct-min {
+  background: #FBF9F4 !important;
+}
+body.result-page .jbx-ct-wrap tbody tr:first-child td:nth-child(6) {
+  background: rgba(135, 168, 188, .16) !important;
+  color: #4F7286 !important;
+}
+body.result-page .jbx-ct-rank.is-best { background: #87A8BC; }
+body.result-page .jbx-ct-badge {
+  background: rgba(230, 159, 102, .16);
+  color: #C07A44;
+}
+/* 表头术语口语化：第 7 列「瓶颈成员」→「最晚抵达成员」 */
+body.result-page .jbx-ct-wrap th:nth-child(7) { font-size: 0; }
+body.result-page .jbx-ct-wrap th:nth-child(7)::after {
+  content: "最晚抵达成员";
+  font-size: 12px;
+}
+/* 表格上下两行小字注释全部移除（文案由 JS 注入，这里只做隐藏） */
+body.result-page .jbx-ct-title small { display: none; }
+body.result-page .jbx-ct-note { display: none; }
+/* 方案为空时由 #schemeList 统一给出兜底提示，避免重复出现两块空状态 */
+body.result-page .jbx-ct-empty { display: none; }
+body.result-page .jbx-ct-empty {
+  border: 1px solid rgba(135, 168, 188, .2);
+  border-radius: 16px;
+  background: rgba(244, 241, 233, .4);
+}
+
+/* 返回按钮：轻量胶囊，不抢主视觉 */
+body.result-page #backBtn {
+  display: inline-flex;
+  width: auto;
+  margin-top: 30px;
+  padding: 11px 24px;
+  border: 1px solid rgba(135, 168, 188, .35);
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(58, 66, 73, .62);
+  font-size: 13px;
+  letter-spacing: .04em;
+}
+body.result-page #backBtn:hover {
+  border-color: #87A8BC;
+  color: #3A4249;
+}
+
+/* ---------- 窄屏：地图仍为主，三卡改为横向滑动 ---------- */
+@media (max-width: 900px) {
+  body.result-page .page { padding: 20px 16px 48px; }
+  body.result-page #mapBox {
+    padding: 12px;
+    border-radius: 20px;
+  }
+  body.result-page #mapBox #mapArea {
+    height: clamp(300px, 46vh, 420px);
+  }
+  body.result-page .jbx-legend {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    max-width: none;
+    margin-top: 10px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+  body.result-page #schemeList {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: min(84%, 340px);
+    align-items: start;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 8px;
+  }
+  body.result-page .scheme-card { scroll-snap-align: start; }
+}
+@media (max-width: 640px) {
+  body.result-page .header h1 { font-size: 21px; letter-spacing: .16em; text-indent: 0; }
+  body.result-page .jbx-tab { padding: 8px 0; font-size: 12px; }
+  body.result-page .scheme-head { margin-top: 24px; }
+  body.result-page .plan-pick-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  body.result-page .plan-pick-bar .btn { width: 100%; }
+}
+  

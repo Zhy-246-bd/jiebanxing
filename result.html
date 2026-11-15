@@ -4,17 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>结伴行 · 方案结果</title>
-  <!-- 三层样式，顺序不能调：
-       1. style.css   —— 老骨架，只保留 scheme-card / leg / metric 等结果页专有类的兜底样式
-       2. style1.css  —— 陈滢竹的视觉体系（变量 / body / .card / .btn），result 页靠它跟封面统一
-       3. result.css  —— 陈滢竹的结果页覆盖层，在 </body> 前加载，能盖住下面三个脚本注入的样式
-       要改风格只改 css/result.css，本文件以及其他两个 css 都不用动。 -->
   <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/style1.css">
 </head>
-<body>
+<body class="result-page">
   <div class="page">
     <div class="header">
+      <p class="eyebrow">Journey Together</p>
       <h1>方案对比</h1>
       <p id="subtitle">加载中…</p>
     </div>
@@ -39,7 +34,27 @@
          全部真实时不打扰。内容由 js/data-hint.js 渲染，不占页面结构。 -->
     <div id="dataHint"></div>
 
+    <div class="scheme-head">
+      <h2>可选方案</h2>
+      <span>三种走法 · 综合得分越高越优</span>
+    </div>
+
+    <div class="scheme-guide">
+      <span><b>全部直达</b>各自出发，直接到目的地</span>
+      <span><b>全员汇合</b>先到同一集合点，再一起走</span>
+      <span><b>部分汇合</b>顺路的人先碰头，再一起走</span>
+    </div>
+
+    <p class="scheme-caption">这 3 套方案是算法从大量可行方案中筛选出的优质候选；出行方式由每位成员独立选择，不只是汇合方式。</p>
+
     <div id="schemeList"></div>
+
+    <!-- 选中方案后的操作条：默认隐藏，选中态由 JS 添加（卡片加 .is-selected 或 aria-selected="true"）后显示 -->
+    <div class="plan-pick-bar" id="planPickBar" hidden>
+      <p>已选定该方案，开启路线指引</p>
+      <button class="btn btn-primary" id="startNavBtn" type="button">开始导航</button>
+    </div>
+
     <div id="compareTable"></div>
 
     <!-- 从房间进来的回房间，单机演示的回录入页；由下方脚本按 localStorage 判断 -->
@@ -98,9 +113,5 @@
   <script src="js/compare-table.js"></script>
   <script src="js/data-hint.js"></script>
   <script src="js/map-view.js"></script>
-
-  <!-- 必须放在最后：上面三个脚本会各自往 <head> 末尾追一段 <style>，
-       这里的链接排在其后，同权重下后者生效，才能盖住地图/对比表/提示条的硬编码配色。 -->
-  <link rel="stylesheet" href="css/result.css">
 </body>
 </html>

@@ -556,7 +556,8 @@ var WEIGHTS_STORE_KEY = "jbx_weights";
 var _WEIGHT_KEYS = ["totalTime", "totalCost", "worstTime", "maxWait"];
 
 /* 权重清洗：负数/非数字归零，再归一化到和为 1
-   （归一化之后得分必然落在 0~1，答辩时好解释"这个方案综合得分 0.42 是什么意思"） */
+   对外展示的 score 是 1-100 分制（100 最优，最差保底 60），分数越高越优；
+   拆解用的 scoreDetail 仍保留 0~1 的原始分项，答辩讲"为什么赢/输在哪一项"读它 */
 function _sanitizeWeights(w) {
   var out = {}, sum = 0;
   _WEIGHT_KEYS.forEach(function (k) {
@@ -654,7 +655,7 @@ function generateSchemes(members, dest, opts) {
         nWorst = norm("worstTimeMin"), nWait = norm("maxWaitMin");
 
     schemes.forEach(function (s, i) {
-      /* 新增 scoreDetail：四个分项的加权贡献拆开，
+      /* scoreDetail：四个分项的加权贡献拆开（0~1，越小越好），
          答辩讲"这个方案为什么赢/输在哪一项"直接读它 */
       var d = {
         totalTime: Math.round(weights.totalTime * nTime[i] * 100) / 100,
@@ -663,9 +664,20 @@ function generateSchemes(members, dest, opts) {
         maxWait: Math.round(weights.maxWait * nWait[i] * 100) / 100
       };
       s.scoreDetail = d;
-      s.score = _round1(d.totalTime + d.totalCost + d.worstTime + d.maxWait);
+      s.rawScore = _round1(d.totalTime + d.totalCost + d.worstTime + d.maxWait); // 内部成本分
     });
-    schemes.sort(function (a, b) { return a.score - b.score; });   // 分越小越好
+
+    /* 1-100 分制映射：最优方案 100 分，最差保底 60 分，中间按成本分差距线性。
+     * 口径好解释："三套里最优的得满分，其余按相对差距落在 60~100 之间，
+     * 都是能用的方案，只是相对优劣"。三套打平时全给 100。 */
+    var raws = schemes.map(function (s) { return s.rawScore; });
+    var rMin = Math.min.apply(null, raws), rMax = Math.max.apply(null, raws);
+    schemes.forEach(function (s) {
+      s.score = (rMax - rMin < 1e-9)
+        ? 100
+        : Math.round(60 + 40 * (rMax - s.rawScore) / (rMax - rMin));
+    });
+    schemes.sort(function (a, b) { return b.score - a.score; });   // 分越高越优，最优排第一
 
     /* 一句话结论：文案在 js/result-text.js（闫雅欣维护），此处只做选择 */
     var TXT = (typeof RESULT_TEXT === "undefined")

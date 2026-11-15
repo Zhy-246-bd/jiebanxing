@@ -66,6 +66,14 @@
   }
 
   /* ---------- 4. 每列最小值（用于高亮） ---------- */
+  /* 综合得分专用：1-100 整数，不补 .0（100 显示成 100 而不是 100.0） */
+  function fmtScore(v) {
+    if (v === null || v === undefined || v === "") return "—";
+    var n = Number(v);
+    if (!isFinite(n)) return "—";
+    return String(Math.round(n));
+  }
+
   function minOf(schemes, pick) {
     var m = Infinity;
     for (var i = 0; i < schemes.length; i++) {
@@ -76,10 +84,19 @@
   }
 
   /* 一位小数的数据用 0.05 容差判断「并列最优」，避免浮点误差漏高亮 */
-  function isMin(v, m) {
+  function maxOf(schemes, pick) {
+    var m = -Infinity;
+    for (var i = 0; i < schemes.length; i++) {
+      var v = Number(pick(schemes[i]));
+      if (isFinite(v) && v > m) m = v;
+    }
+    return m;
+  }
+
+  function isMax(v, m) {
     var n = Number(v);
     if (!isFinite(n) || !isFinite(m)) return false;
-    return Math.abs(n - m) < 0.05 + 1e-9;
+    return n >= m - 0.5;   // 100 分制四舍五入到整数，容差 0.5 足够
   }
 
   /* ---------- 5. 样式：自带，不碰 style.css ---------- */
@@ -140,12 +157,12 @@
     var mCost  = minOf(schemes, function (s) { return s.metrics && s.metrics.totalCost; });
     var mWorst = minOf(schemes, function (s) { return s.metrics && s.metrics.worstTimeMin; });
     var mWait  = minOf(schemes, function (s) { return s.metrics && s.metrics.maxWaitMin; });
-    var mScore = minOf(schemes, function (s) { return s.score; });
+    var mScore = maxOf(schemes, function (s) { return s.score; });   // score 是 1-100，分高最优
 
     var html = [];
     html.push('<div class="jbx-ct-block">');
     html.push('<h3 class="jbx-ct-title">三方案指标对比');
-    html.push('<small>绿底 = 该列最优；四项指标与得分都是越小越好</small></h3>');
+    html.push('<small>绿底 = 该列最优；四项指标越小越好，综合得分越高越好（满分 100）</small></h3>');
     html.push('<div class="jbx-ct-wrap">');
     html.push('<table class="' + TABLE_CLASS + '">');
     html.push("<thead><tr>");
@@ -173,8 +190,8 @@
         fmt(mt.worstTimeMin, '<span class="jbx-ct-unit">分</span>') + "</td>");
       html.push('<td class="' + (isMin(mt.maxWaitMin, mWait) ? "jbx-ct-min" : "") + '">' +
         fmt(mt.maxWaitMin, '<span class="jbx-ct-unit">分</span>') + "</td>");
-      html.push('<td class="' + (isMin(s.score, mScore) ? "jbx-ct-min" : "") + '">' +
-        fmt(s.score) + "</td>");
+      html.push('<td class="' + (isMax(s.score, mScore) ? "jbx-ct-min" : "") + '">' +
+        fmtScore(s.score) + "</td>");
 
       html.push("<td>" + bottleneckNames(s) + "</td>");
       html.push('<td style="white-space:normal;text-align:left;min-width:150px;">' +
