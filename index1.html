@@ -424,7 +424,7 @@
           </div>
           <div class="field">
             <label>本人出发地</label>
-            <input id="fromInput" name="from" type="text" placeholder="例如：上海虹桥站">
+            <input id="fromInput" name="from" type="text" placeholder="输入小区/地铁站/学校名，从列表里选准位置">
           </div>
 
           <div class="field">
@@ -576,7 +576,7 @@
         </div>
         <div class="field">
           <label>出发地（选填）</label>
-          <input id="memberFromInput" type="text" maxlength="30" placeholder="如：上海徐汇" autocomplete="off">
+          <input id="memberFromInput" type="text" maxlength="30" placeholder="输入地名从列表选择，可不填" autocomplete="off">
         </div>
         <div class="modal-actions">
           <button type="button" class="btn btn-ghost" data-close="addMemberModal">取消</button>
@@ -718,10 +718,16 @@
         filled: !!(row.origin && String(row.origin).trim()),
         isMe: isMe,
         startFrom: row.origin || '',
+        startCoord: (isFinite(row.origin_lng) && isFinite(row.origin_lat)) ? { lng: row.origin_lng, lat: row.origin_lat } : null,
         pref: prefs.join(','),
         window: win,
         budget: row.budget ? String(row.budget) : ''
       };
+      // 成员的精确坐标（他从联想里选的）注入本机解析缓存：
+      // 发起人生成方案时全链路都用官方 POI 坐标，不再依赖地理编码猜位置
+      if (row.origin && isFinite(row.origin_lng) && isFinite(row.origin_lat) && typeof seedCoord === 'function') {
+        seedCoord(row.origin, row.origin_lng, row.origin_lat);
+      }
     }
 
     // 把云端房间整体同步进 state；返回房间行
@@ -841,6 +847,7 @@
     }
     function resetPersonForm() {
       ['nameInput', 'fromInput', 'windowInput', 'budgetInput'].forEach(id => { const el = $('#'+id); el.value = ''; el.classList.remove('error'); });
+      pickedFrom = null;                     // 重进流程时清掉上次选的点
       $('#prefHidden').value = '';
       $$('#prefGroup .pref-chip').forEach(c => c.classList.remove('active'));
     }
@@ -1025,6 +1032,69 @@
       syncPrefUI();
     });
 
+    // ---- 出发地联想选点（高德输入提示）----
+    // 手打文字再交给地理编码取第一个匹配，误差不可控；从候选里点选，坐标就是官方 POI 的。
+    // 选中的坐标做两件事：1) seedCoord 注入本机解析缓存（生成方案直接用）；2) 随 joinRoom 上云（发起人也能用）
+    function attachTips(input, onPick) {
+      if (!input || typeof inputTips !== 'function') return;
+      if (!document.getElementById('jbx-tips-style')) {
+        const st = document.createElement('style');
+        st.id = 'jbx-tips-style';
+        st.textContent =
+          '.jbx-tips-wrap{position:relative}' +
+          '.jbx-tips{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);z-index:40;max-height:220px;overflow:auto}' +
+          '.jbx-tips button{display:block;width:100%;text-align:left;padding:10px 12px;background:none;border:0;font-size:14px;color:#2d3748;cursor:pointer}' +
+          '.jbx-tips button:hover,.jbx-tips button:focus{background:#f0f4f8;outline:none}' +
+          '.jbx-tips .addr{display:block;font-size:12px;color:#718096;margin-top:2px}' +
+          '.jbx-tips .empty{padding:10px 12px;font-size:13px;color:#718096}';
+        document.head.appendChild(st);
+      }
+      const wrap = document.createElement('div');
+      wrap.className = 'jbx-tips-wrap';
+      input.parentNode.insertBefore(wrap, input);
+      wrap.appendChild(input);
+      const box = document.createElement('div');
+      box.className = 'jbx-tips';
+      box.hidden = true;
+      wrap.appendChild(box);
+
+      let timer = null;
+      const hide = () => { box.hidden = true; box.innerHTML = ''; };
+      input.addEventListener('input', () => {
+        onPick(null);                                  // 手打的文字不算已选点，先清掉
+        const kw = input.value.trim();
+        clearTimeout(timer);
+        if (kw.length < 2) { hide(); return; }
+        timer = setTimeout(() => {
+          inputTips(kw).then(tips => {
+            if (input.value.trim() !== kw) return;     // 用户已继续输入，丢弃过期结果
+            box.innerHTML = '';
+            if (!tips.length) {
+              box.innerHTML = '<div class="empty">没有匹配的地点，试试输入更完整的名称</div>';
+              box.hidden = false;
+              return;
+            }
+            tips.forEach(t => {
+              const b = document.createElement('button');
+              b.type = 'button';
+              b.textContent = t.name + (t.address ? ' · ' + t.address : '');
+              b.addEventListener('mousedown', e => e.preventDefault());  // 别让输入框 blur 先把下拉关了
+              b.addEventListener('click', () => { input.value = t.name; onPick(t); hide(); });
+              box.appendChild(b);
+            });
+            box.hidden = false;
+          });
+        }, 350);
+      });
+      input.addEventListener('blur', () => setTimeout(hide, 180));
+    }
+
+    let pickedFrom = null;          // 本人出发地的精确坐标（点选才有）
+    attachTips($('#fromInput'), t => { pickedFrom = t ? { lng: t.lng, lat: t.lat } : null; });
+
+    let pickedMemberFrom = null;    // 发起人代填成员的精确坐标
+    attachTips($('#memberFromInput'), t => { pickedMemberFrom = t ? { lng: t.lng, lat: t.lat } : null; });
+
     const personForm = $('#personForm');
     personForm.addEventListener('submit', e => {
       e.preventDefault();
@@ -1058,6 +1128,7 @@
       Cloud.joinRoom(state.inviteCode, {
         name: name,
         origin: from,
+        originCoord: pickedFrom,               // 从联想里选过才有，手打的为 null
         mode: modes.join(','),
         budget: budgetNum,
         winStart: window_,
@@ -1213,6 +1284,7 @@
     $('#addMemberBtn').addEventListener('click', () => {
       $('#memberNameInput').value = '';
       $('#memberFromInput').value = '';
+      pickedMemberFrom = null;               // 上次弹窗选的点不带入这次
       $('#memberNameInput').classList.remove('error');
       openModal('addMemberModal');
       setTimeout(() => $('#memberNameInput').focus(), 60);
@@ -1229,7 +1301,9 @@
       // 代填：给一个临时令牌，否则会覆盖发起人自己那一行
       const proxyToken = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
       Cloud.joinRoom(state.inviteCode, {
-        name: name, origin: from, mode: 'transit', budget: 0, winStart: null, winEnd: null
+        name: name, origin: from,
+        originCoord: pickedMemberFrom,
+        mode: 'transit', budget: 0, winStart: null, winEnd: null
       }, proxyToken).then(() => syncRoom(state.inviteCode))
         .then(() => {
           closeModal('addMemberModal');

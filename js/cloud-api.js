@@ -173,7 +173,7 @@
       return Promise.all([
         d.from("rooms").select("*").eq("code", c).maybeSingle(),
         d.from("room_members")
-          .select("id, member_token, name, origin, mode, budget, win_start, win_end, joined_at, removed_at")
+          .select("id, member_token, name, origin, origin_lng, origin_lat, mode, budget, win_start, win_end, joined_at, removed_at")
           .eq("room_code", c)
           .order("joined_at", { ascending: true })
       ]);
@@ -208,6 +208,8 @@
       member_token: token,
       name: me.name,
       origin: me.origin,
+      origin_lng: (me.originCoord && isFinite(me.originCoord.lng)) ? me.originCoord.lng : null,
+      origin_lat: (me.originCoord && isFinite(me.originCoord.lat)) ? me.originCoord.lat : null,
       mode: me.mode || "transit",
       budget: Number(me.budget) || 0,
       win_start: me.winStart || null,

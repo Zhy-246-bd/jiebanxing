@@ -395,6 +395,66 @@ function queryRoute(origin, dest, mode) {
   return task;
 }
 
+/* ---------------- 输入提示（出发地联想选点） ---------------- */
+var _tipsCache = {};
+
+/**
+ * 高德"输入提示"：给关键词返回候选地点（官方 POI，自带精确坐标）。
+ * 出发地让用户从候选里点选，坐标就是官方的，不再靠
+ * "手打文字 → 地理编码取第一个匹配"这种容易错位的解析。
+ * @param {string} keyword  至少 2 个字
+ * @param {string} [city]   不传用当前城市 adcode，限定在本市范围
+ * @returns {Promise<Array<{name,address,lng,lat,adcode}>>}  无 Key / 失败返回 []
+ */
+function inputTips(keyword, city) {
+  keyword = String(keyword || "").trim();
+  if (keyword.length < 2 || !AMAP_KEY) return Promise.resolve([]);
+  var c = String(city || AMAP_CITY_ADCODE);
+  var ck = c + "|" + keyword;
+  var hit = _cacheGet(_tipsCache, ck);
+  if (hit) return Promise.resolve(hit);
+
+  var url = "https://restapi.amap.com/v3/assistant/inputtips?keywords=" +
+    encodeURIComponent(keyword) + "&city=" + encodeURIComponent(c) +
+    "&citylimit=true" + "&key=" + AMAP_KEY;
+  return _fetchJson(url).then(function (r) {
+    var tips = (r && r.tips || []).filter(function (t) {
+      return t && t.name && typeof t.location === "string" && t.location.indexOf(",") > 0;
+    }).slice(0, 8).map(function (t) {
+      var ll = t.location.split(",");
+      return {
+        name: t.name,
+        address: String(t.address || "").replace(/^\[\],?/, ""),   // 高德有时给 "[]" 开头的区域串
+        lng: parseFloat(ll[0]),
+        lat: parseFloat(ll[1]),
+        adcode: t.adcode || c
+      };
+    }).filter(function (t) { return isFinite(t.lng) && isFinite(t.lat); });
+    _cacheSet(_tipsCache, ck, tips, 5 * 60 * 1000);               // 联想结果 5 分钟缓存
+    return tips;
+  }).catch(function () { return []; });
+}
+
+/**
+ * 把"用户在联想里点选的精确坐标"预写进地名解析缓存。
+ * 写入后 engine 的 _geoResolve(该地名) 与 queryRoute 全部直接命中，
+ * 三套方案用的都是官方 POI 坐标，还省掉一次地理编码请求。
+ * 不改 members 数据结构：origin 仍是可读文本，坐标只是让解析预先命中。
+ * @param {string} name  与输入框一致的文本（会 trim 后作为缓存 key）
+ * @param {number} lng @param {number} lat
+ * @param {string} [adcode]  选点所属 adcode，缺省用当前城市
+ */
+function seedCoord(name, lng, lat, adcode) {
+  if (!name || !isFinite(lng) || !isFinite(lat)) return false;
+  var n = String(name).trim();
+  _cacheSet(_geoCache, _ck(n), {
+    ok: true, lng: lng, lat: lat,
+    adcode: adcode || AMAP_CITY_ADCODE,
+    name: n, source: "选点"
+  }, CACHE_TTL_MS);
+  return true;
+}
+
 /* ---------------- 验收辅助 ---------------- */
 function amapStats() {
   var s = {
