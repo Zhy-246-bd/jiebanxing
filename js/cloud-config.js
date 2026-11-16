@@ -16,8 +16,8 @@
 (function (g) {
   g.JBX_CLOUD = {
     backend: "supabase",
-    supabaseUrl: "REPLACE_WITH_YOUR_SUPABASE_URL",        // ← 组长填这里
-    supabaseAnonKey: "REPLACE_WITH_YOUR_SUPABASE_ANON_KEY", // ← 组长填这里
+    supabaseUrl: "https://bsiprxvkbnmmdkxtxokq.supabase.co",
+    supabaseAnonKey: "sb_publishable_O0AS0RikutJv7089NwttRw_0NRqgiGI",
     /* supabase-js v2 UMD 版，从 jsDelivr 懒加载（纯 HTML 项目，没有构建步骤） */
     sdkUrl: "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"
   };
