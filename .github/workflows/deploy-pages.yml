@@ -30,6 +30,10 @@ jobs:
           AMAP_JS_KEY: ${{ secrets.AMAP_JS_KEY }}
           AMAP_JS_CODE: ${{ secrets.AMAP_JS_CODE }}
         run: |
+          # 去掉 Secret 里可能混入的换行/空格（粘贴时容易带上）
+          AMAP_WEB_KEY="$(echo "${AMAP_WEB_KEY}" | tr -d '[:space:]')"
+          AMAP_JS_KEY="$(echo "${AMAP_JS_KEY}" | tr -d '[:space:]')"
+          AMAP_JS_CODE="$(echo "${AMAP_JS_CODE}" | tr -d '[:space:]')"
           mkdir -p site/js
           cat > site/js/config.local.js <<EOF
           (function (g) {
