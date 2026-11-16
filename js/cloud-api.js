@@ -1,18 +1,22 @@
 /* ============================================================
  * cloud-api.js — 房间制的云端读写（张海燕维护，新增 11-13）
+ *                              11-16 迁移到 Supabase
+ * 迁移原因：云服务端强制精确 Origin 匹配，GitHub Pages 来源被拒（403），
+ *           平台无自定义域名白名单入口；Supabase CORS 开放、免费、免备案。
  *
  * 设计要点：
  *   1. 不登录。身份靠两样东西：
  *        · 设备令牌（deviceToken，存本机 localStorage）—— 区分"我"是哪个成员
  *        · 房间邀请码（6 位）—— 区分"这个房间"
- *      服务端表策略对 anon 开放读写，安全性由"房间码不公开猜不到 + 7 天过期"兜底。
+ *      RLS 对 anon 开放读写，安全性由"房间码不公开猜不到 + 7 天过期"兜底。
  *      这是课程原型的设计取舍，不是生产级权限方案（答辩如实说）。
  *   2. 一个房间只算一次：发起人算完把结果写进 rooms.plan，其余人只读。
- *      个人 Key 只有 3 QPS，6 台设备各算一遍必然撞限频。
+ *      Supabase 免费额度远高于个人 Key 限频，6 台设备共用无压力。
  *   3. 所有函数返回 Promise，失败抛 Error（已翻译成中文），调用方只管 try/catch。
  *   4. SDK 与配置都不写死在这里：配置在 cloud-config.js，SDK 首次用时从 CDN 懒加载。
  *
  * 依赖：js/cloud-config.js 必须先加载。
+ *       表结构见仓库根目录 supabase-schema.sql
  * ============================================================ */
 (function (g) {
   var CFG = g.JBX_CLOUD;
@@ -27,7 +31,7 @@
   /* ---------------- 初始化 ---------------- */
 
   function loadSdk() {
-    if (TG.WorkBuddyCloud) return Promise.resolve();
+    if (TG.supabase && TG.supabase.createClient) return Promise.resolve();
     if (_sdk) return _sdk;
     _sdk = new Promise(function (resolve, reject) {
       var s = TG.document.createElement("script");
@@ -42,15 +46,21 @@
     return _sdk;
   }
 
+  function configReady() {
+    return CFG && CFG.supabaseUrl && CFG.supabaseAnonKey &&
+      !/REPLACE|填入|YOUR_/i.test(CFG.supabaseUrl) && !/REPLACE|填入|YOUR_/i.test(CFG.supabaseAnonKey);
+  }
+
   function db() {
-    if (_client) return Promise.resolve(_client.database);
+    if (_client) return Promise.resolve(_client);
+    if (!configReady()) {
+      return Promise.reject(new Error("云数据库还没配置好：请在 js/cloud-config.js 填入 Supabase 的 URL 和 Anon Key（见组长的 Supabase 操作单）"));
+    }
     return loadSdk().then(function () {
-      _client = TG.WorkBuddyCloud.createWorkBuddyCloud({
-        endpoint: CFG.endpoint,
-        oauthRelayBaseUrl: CFG.oauthRelayBaseUrl,
-        publishableKey: CFG.publishableKey
+      _client = TG.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {
+        auth: { persistSession: false }   // 不登录，无需会话持久化
       });
-      return _client.database;
+      return _client;
     });
   }
 
@@ -58,10 +68,9 @@
 
   var CODE_MSG = {
     "23505": "这个邀请码已经被占用了，正在换一个",
-    "42501": "没有权限操作这个房间",
-    "42P01": "云数据库还没初始化，请联系组长",
-    "PGRST116": "房间不存在",
-    "23503": "房间已失效，请重新创建"
+    "23503": "房间已失效，请重新创建",
+    "42P01": "云数据库还没初始化，请联系组长执行 supabase-schema.sql",
+    "42501": "没有权限操作这个房间"
   };
 
   function wrap(err) {
@@ -70,10 +79,12 @@
     var text = CODE_MSG[code];
     if (!text) {
       var raw = String(err.message || "");
-      if (/Failed to fetch|NetworkError|Load failed|ERR_NETWORK/i.test(raw)) {
+      if (/Failed to fetch|NetworkError|Load failed|ERR_NETWORK|fetch/i.test(raw)) {
         text = "连不上云服务，请检查网络后重试";
-      } else if (/JWT|publishable|apikey/i.test(raw)) {
+      } else if (/Invalid API key|JWT|apikey/i.test(raw)) {
         text = "云服务配置有误，请联系组长检查 cloud-config.js";
+      } else if (/schema cache|relation .* does not exist/i.test(raw)) {
+        text = "云数据库还没初始化，请联系组长执行 supabase-schema.sql";
       } else {
         text = raw || "云服务异常，请稍后重试";
       }

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -617,8 +617,8 @@
   <script src="js/cities.js?v=1115b"></script>
   <script src="js/city-online.js?v=1115b"></script>
   <script src="js/engine.js?v=1115b"></script>
-  <script src="js/cloud-config.js?v=1115b"></script>
-  <script src="js/cloud-api.js?v=1115b"></script>
+  <script src="js/cloud-config.js?v=1117a"></script>
+  <script src="js/cloud-api.js?v=1117a"></script>
 
   <script>
   /* ==========================================================
@@ -1514,18 +1514,6 @@
           citySel.appendChild(o);
         });
         citySel.value = currentCityKey();
-      }
-
-      // 镜像站提示：云服务只放行正式发布域名，github.io 等镜像地址房间功能不可用（11-16）
-      const OFFICIAL_ORIGIN = 'https://wbapp-3kiqbllnfhxry5st8ddq57.app.workbuddy.host';
-      if (location.origin !== OFFICIAL_ORIGIN && !/^https?:\/\/(localhost|127\.0\.0\.1)/.test(location.origin)) {
-        const bar = document.createElement('div');
-        bar.style.cssText = 'background:#fff7e6;color:#8a5a00;border-bottom:1px solid #f0d9a8;' +
-          'padding:8px 14px;font-size:13px;line-height:1.6;';
-        bar.innerHTML = '当前是镜像预览地址：路线规划、联想等功能可正常使用，但<b>房间/多人协作</b>云端功能仅在正式地址开放。' +
-          '正式地址：<a href="' + OFFICIAL_ORIGIN + '/?sharecode=P3WG7QN5GX" style="color:#1677ff;word-break:break-all;">' +
-          OFFICIAL_ORIGIN + '/?sharecode=P3WG7QN5GX</a>';
-        document.body.insertBefore(bar, document.body.firstChild);
       }
 
       // 有上次的房间就提一句，方便回到房间继续（不自动跳转，避免打断演示）

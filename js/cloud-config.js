@@ -1,21 +1,24 @@
 /* ============================================================
- * cloud-config.js — 云服务公开配置（可以进仓库）
+ * cloud-config.js — 云数据库配置（Supabase，11-16）
  *
- * 这三个值来自开通云服务时返回的 publicConfig：
- *   endpoint        —— 本应用的数据平面地址（每个应用不同，不能猜、不能从 location 推）
- *   oauthRelayBaseUrl —— 登录中转（本方案不用登录，保留以便将来加账号）
- *   publishableKey  —— 标识"是哪个应用"，本身不带权限；服务端还会校验来源域名
+ * 为什么换 Supabase（答辩可讲）：
+ *   原 WorkBuddy 云服务强制精确 Origin 匹配，GitHub Pages 来源被 403
+ *   拒绝且无法加白名单；Supabase CORS 开放、免费、免实名备案，
+ *   免费额度 5 万月活 / 5GB，课程原型绰绰有余。
  *
- * 注意：这里没有任何密钥。真正的资源 id 和数据库凭据都在服务端，不下发到前端。
- * 换应用 / 重新发布时，只改这个文件。
+ * 这两个值来自 Supabase 控制台 → Project Settings → API：
+ *   supabaseUrl    —— 项目地址，形如 https://xxxx.supabase.co
+ *   supabaseAnonKey —— 匿名公钥，本来就会出现在浏览器里，可进仓库
+ *                     （真正的权限由 RLS 行级策略控制，见 supabase-schema.sql）
+ *
+ * ⚠️ 未填入时房间功能会明确提示"云数据库还没配置好"，不会静默失败。
  * ============================================================ */
 (function (g) {
   g.JBX_CLOUD = {
-    endpoint: "https://wbapp-3kiqbllnfhxry5st8ddq57.app.workbuddy.host",
-    oauthRelayBaseUrl: "https://www.workbuddy.cn/v2/as/genie-baas/oauth",
-    publishableKey: "wbpk_3KIQbllNFHXRY5St8dDQ57_wB13zNWx9ql35S20s6vJoiXkgRbkHNx0",
-    appId: "wbapp_3KIQbllNFHXRY5St8dDQ57",
-    /* SDK 从 CDN 加载（纯 HTML 项目，没有构建步骤） */
-    sdkUrl: "https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"
+    backend: "supabase",
+    supabaseUrl: "REPLACE_WITH_YOUR_SUPABASE_URL",        // ← 组长填这里
+    supabaseAnonKey: "REPLACE_WITH_YOUR_SUPABASE_ANON_KEY", // ← 组长填这里
+    /* supabase-js v2 UMD 版，从 jsDelivr 懒加载（纯 HTML 项目，没有构建步骤） */
+    sdkUrl: "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"
   };
 })(typeof globalThis !== "undefined" ? globalThis : window);
