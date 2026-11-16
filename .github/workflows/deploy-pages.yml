@@ -1,0 +1,67 @@
+name: Deploy to GitHub Pages
+
+# 每次推送到 main 自动部署；也可以在 Actions 页手动触发
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      # config.local.js 含高德 Key，不进仓库；
+      # 部署时从仓库 Secrets 现场生成，Key 永远不出现在代码里
+      - name: 从 Secrets 生成 config.local.js
+        env:
+          AMAP_WEB_KEY: ${{ secrets.AMAP_WEB_KEY }}
+          AMAP_JS_KEY: ${{ secrets.AMAP_JS_KEY }}
+          AMAP_JS_CODE: ${{ secrets.AMAP_JS_CODE }}
+        run: |
+          mkdir -p site/js
+          cat > site/js/config.local.js <<EOF
+          (function (g) {
+            g.__AMAP_KEY__ = "${AMAP_WEB_KEY}";
+            g.__AMAP_JS_KEY__ = "${AMAP_JS_KEY}";
+            g.__AMAP_JS_CODE__ = "${AMAP_JS_CODE}";
+          })(typeof globalThis !== "undefined" ? globalThis : window);
+          EOF
+
+      - name: 组装站点文件
+        run: |
+          touch site/.nojekyll
+          cp -r index.html index1.html demo.html result.html css js site/
+          rm -f site/js/test-*.js
+          echo "--- site 内容 ---"
+          find site -type f | sort
+
+      - name: 配置 Pages
+        uses: actions/configure-pages@v5
+
+      - name: 上传站点产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 发布到 Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
