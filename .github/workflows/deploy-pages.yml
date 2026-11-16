@@ -46,7 +46,7 @@ jobs:
       - name: 组装站点文件
         run: |
           touch site/.nojekyll
-          cp -r index.html index1.html demo.html result.html css js site/
+          cp -r index.html index1.html demo.html result.html _cloudtest.html css js site/
           rm -f site/js/test-*.js
           echo "--- site 内容 ---"
           find site -type f | sort
