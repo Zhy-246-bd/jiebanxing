@@ -461,6 +461,63 @@ function seedCoord(name, lng, lat, adcode) {
   return true;
 }
 
+/* ---------------- 逆地理：坐标 → 地址（地图选点用，2026-11-16 新增） ---------------- */
+/* 为什么不用 JS API 的 AMap.Geocoder：
+   ① REST 走的是同一个 Key 体系，失败概率明显更低；
+   ② 万一失败了，调用方手里还有 lng/lat，可以降级显示"114.31, 30.59"，
+      不会出现"选了点但拿不到地址"这种半残状态；
+   ③ 不依赖地图 SDK 是否加载成功，地图挂了也能解析。 */
+var _regeoCache = {};
+var REGEO_TTL_MS = 5 * 60 * 1000;                    // 同坐标 5 分钟内不重复请求
+
+/**
+ * 坐标反查地址。
+ * @param {number} lng 经度
+ * @param {number} lat 纬度
+ * @returns {Promise<{ok:boolean, name:string, adcode:string, township:string,
+ *                    formatted:string, lng:number, lat:number, reason?:string}>}
+ *          失败时 ok:false 且 **不 reject**，调用方据此降级，不会卡住界面
+ */
+function regeo(lng, lat) {
+  var L = parseFloat(lng), A = parseFloat(lat);
+  var fail = function (why) {
+    return { ok: false, name: "", adcode: "", township: "", formatted: "", lng: L, lat: A, reason: why };
+  };
+  if (!isFinite(L) || !isFinite(A)) return Promise.resolve(fail("bad-coord"));
+
+  // 5 位小数 ≈ 1 米：拖动一点点不值得重新请求，也避免缓存里塞满相近坐标
+  var ck = "regeo|" + L.toFixed(5) + "|" + A.toFixed(5);
+  var hit = _cacheGet(_regeoCache, ck);
+  if (hit) { _stats.cacheHits++; return Promise.resolve(hit); }
+  if (!AMAP_KEY) return Promise.resolve(fail("no-key"));    // 没配 Key：静默降级
+
+  var url = "https://restapi.amap.com/v3/geocode/regeo?location=" + L + "," + A +
+    "&radius=200&extensions=base&key=" + AMAP_KEY;
+  return _fetchJson(url, 1).then(function (body) {          // 解析失败重试 1 次就够，界面在等
+    var rg = body.regeocode || {};
+    var ac = rg.addressComponent || {};
+    var name = rg.formatted_address || "";
+    if (!name) {
+      // 少数点位（荒郊、海边）没有 formatted_address，用结构化字段拼一个
+      var sn = ac.streetNumber || {};
+      name = [ac.province, ac.city, ac.district, ac.township, (sn.street || "") + (sn.number || "")]
+        .filter(function (x) { return x && String(x).length; }).join("");
+    }
+    if (!name) return fail("empty");
+    var res = {
+      ok: true, name: name,
+      adcode: ac.adcode || AMAP_CITY_ADCODE,
+      township: ac.township || "",
+      formatted: rg.formatted_address || name,
+      lng: L, lat: A
+    };
+    _cacheSet(_regeoCache, ck, res, REGEO_TTL_MS);
+    return res;
+  }).catch(function (e) {
+    return fail((e && e.message) || "error");
+  });
+}
+
 /* ---------------- 验收辅助 ---------------- */
 function amapStats() {
   var s = {
@@ -498,5 +555,8 @@ if (typeof document !== "undefined" && document.addEventListener) {
 
 /* Node 环境下导出，便于命令行自测（浏览器里这段自动跳过） */
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { queryRoute: queryRoute, amapStats: amapStats, _geoResolve: _geoResolve };
+  module.exports = {
+    queryRoute: queryRoute, amapStats: amapStats, _geoResolve: _geoResolve,
+    inputTips: inputTips, seedCoord: seedCoord, regeo: regeo, _estimate: _estimate
+  };
 }
