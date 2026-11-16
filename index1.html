@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>结伴行 · 短途结伴出游</title>
-  <link rel="stylesheet" href="css/style1.css?v=1115b">
+  <link rel="stylesheet" href="css/style1.css?v=1117b">
 </head>
 <body class="home">
 
@@ -428,17 +428,26 @@
           </div>
 
           <div class="field">
-            <label for="prefHidden">出行方式</label>
-            <!-- 沿用原 id，现有 JS 仍通过 #prefHidden.value 读取，无需改动脚本 -->
-            <input id="prefHidden" name="pref" type="text" autocomplete="off"
-                   placeholder="例如“自驾、公交、骑行等，可自行填写”">
-            <!-- 预设选项已移除；保留空容器，兼容现有 JS 的事件绑定 -->
-            <div class="pref-group" id="prefGroup" hidden></div>
+            <label for="prefHidden">出行方式 <span class="label-hint">可多选</span></label>
+            <!-- 真实值仍写进 #prefHidden（逗号串），现有 JS 与引擎口径不变 -->
+            <input id="prefHidden" name="pref" type="hidden" autocomplete="off">
+            <div class="pref-group" id="prefGroup">
+              <button type="button" class="pref-chip" data-pref="transit">地铁 / 公交</button>
+              <button type="button" class="pref-chip" data-pref="taxi">打车</button>
+              <button type="button" class="pref-chip" data-pref="bike">骑行 / 步行</button>
+            </div>
           </div>
 
           <div class="field">
             <label>可出发时间窗口</label>
-            <input id="windowInput" name="window" type="text" placeholder="例如：周六 08:00 – 10:00">
+            <!-- 两个下拉选项合成 #windowInput（"08:00 – 10:00"），下游解析与展示逻辑不变 -->
+            <div class="time-range">
+              <select id="winStartSel" aria-label="最早出发时间"></select>
+              <span class="time-sep">至</span>
+              <select id="winEndSel" aria-label="最晚出发时间"></select>
+            </div>
+            <input id="windowInput" name="window" type="hidden">
+            <p class="field-hint">选一个大概能出发的时间段，系统据此估算到达时刻</p>
           </div>
 
           <div class="field">
@@ -846,10 +855,19 @@
       $('#inviteBox').classList.remove('show');  // 上一次的邀请码盒子一并隐藏
     }
     function resetPersonForm() {
-      ['nameInput', 'fromInput', 'windowInput', 'budgetInput'].forEach(id => { const el = $('#'+id); el.value = ''; el.classList.remove('error'); });
+      ['nameInput', 'fromInput', 'budgetInput'].forEach(id => { const el = $('#'+id); el.value = ''; el.classList.remove('error'); });
       pickedFrom = null;                     // 重进流程时清掉上次选的点
-      $('#prefHidden').value = '';
+      // 出行方式与时间窗口回到默认：地铁/公交 + 08:00–10:00
+      $('#prefHidden').value = 'transit';
       $$('#prefGroup .pref-chip').forEach(c => c.classList.remove('active'));
+      if (typeof syncPrefUI === 'function') syncPrefUI();
+      const ws = $('#winStartSel'), we = $('#winEndSel');
+      if (ws && we) {
+        ws.value = '08:00';
+        we.value = '10:00';
+        ws.classList.remove('error');
+        syncWindowValue();
+      }
     }
 
     const createForm = $('#createForm');
@@ -1028,6 +1046,41 @@
     function syncPrefUI() {
       $$('.pref-chip', prefGroup).forEach(c => c.classList.toggle('active', prefHidden.value.includes(c.dataset.pref)));
     }
+
+    // ---- 时间窗口：双下拉（06:00–23:30，半小时一档）----
+    // 合成 #windowInput 的值（"08:00 – 10:00"），下游 parseWindow / 房间展示照旧工作
+    const winStartSel = $('#winStartSel');
+    const winEndSel = $('#winEndSel');
+    const windowInput = $('#windowInput');
+    (function fillTimeOptions() {
+      const opts = [];
+      for (let h = 6; h <= 23; h++) {
+        const hh = String(h).padStart(2, '0');
+        opts.push(hh + ':00', hh + ':30');
+      }
+      const html = opts.map(t => '<option value="' + t + '">' + t + '</option>').join('');
+      winStartSel.innerHTML = html;
+      winEndSel.innerHTML = html;
+    })();
+    function syncWindowValue() {
+      // 结束不晚于开始时自动顺延半小时，避免提交一对倒挂的时间
+      if (winEndSel.value <= winStartSel.value) {
+        const all = Array.prototype.map.call(winEndSel.options, o => o.value);
+        const next = all[all.indexOf(winStartSel.value) + 1];
+        if (next) winEndSel.value = next;
+      }
+      windowInput.value = winStartSel.value + ' – ' + winEndSel.value;
+    }
+    winStartSel.addEventListener('change', syncWindowValue);
+    winEndSel.addEventListener('change', syncWindowValue);
+    winStartSel.value = '08:00';
+    winEndSel.value = '10:00';
+    winStartSel.classList.remove('error');
+    syncWindowValue();
+
+    // 出行方式默认选中「地铁/公交」，与引擎默认口径一致，用户可再增减
+    if (!prefHidden.value) prefHidden.value = 'transit';
+    syncPrefUI();
     prefGroup.addEventListener('click', e => {
       const btn = e.target.closest('.pref-chip');
       if (!btn) return;
@@ -1120,7 +1173,10 @@
       if (!state.inviteCode) { toast('还没有房间，请先创建或加入房间'); showView('cover'); return; }
 
       const from = $('#fromInput').value.trim();
-      const window_ = $('#windowInput').value.trim();
+      // 时间窗口来自两个下拉，直接取值（不再解析自由文本）
+      const winStartVal = winStartSel.value;
+      const winEndVal = winEndSel.value;
+      const window_ = winStartVal + ' – ' + winEndVal;
       const budgetRaw = $('#budgetInput').value.trim();
       const name = $('#nameInput').value.trim();
       const pref = prefHidden.value;
@@ -1128,13 +1184,14 @@
       let ok = true;
       $('#nameInput').classList.remove('error');
       $('#fromInput').classList.remove('error');
-      $('#windowInput').classList.remove('error');
+      winStartSel.classList.remove('error');
       if (!name) { $('#nameInput').classList.add('error'); toast('请填写姓名'); ok = false; }
       if (!from) { $('#fromInput').classList.add('error'); toast('请填写出发地'); ok = false; }
-      if (!window_) { $('#windowInput').classList.add('error'); toast('请填写可出发时间窗口'); ok = false; }
+      if (!winStartVal || !winEndVal) { winStartSel.classList.add('error'); toast('请选择可出发时间窗口'); ok = false; }
+      if (ok && winEndVal <= winStartVal) { winStartSel.classList.add('error'); toast('结束时间要晚于开始时间'); ok = false; }
       if (!ok) return;
 
-      // 偏好可多选，原样存成逗号串（算方案时取第一个当主方式）；预算是自由文本，抠出数字
+      // 出行方式多选，未选时按公共交通兜底；原样存成逗号串（算方案时取第一个当主方式）
       const modes = pref ? pref.split(',').filter(Boolean) : ['transit'];
       const budgetNum = parseFloat(String(budgetRaw).replace(/[^\d.]/g, '')) || 0;
 
@@ -1149,8 +1206,8 @@
         originCoord: pickedFrom,               // 从联想里选过才有，手打的为 null
         mode: modes.join(','),
         budget: budgetNum,
-        winStart: window_,
-        winEnd: null
+        winStart: winStartVal,
+        winEnd: winEndVal
       }).then(() => syncRoom(state.inviteCode))
         .then(() => {
           persistRoom();

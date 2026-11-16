@@ -663,6 +663,50 @@ button, input, select, textarea { font-family: inherit; }
   color: #fff;
 }
 
+/* 【2026-11-16 新增】时间窗口双下拉：起 / 至 / 止 一行排开，
+ * 手机上仍横向排布（宽度按比例分），避免折行把「至」挤丢 */
+.time-range {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.time-range select {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 46px;
+  padding: 0 30px 0 12px;
+  font-size: 14px;
+  color: var(--ink);
+  border: none;
+  border-bottom: 1.5px solid rgba(135, 168, 188, .35);
+  border-radius: 0;
+  background-color: transparent;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.75 6 6.1l4.5-4.35' fill='none' stroke='%235B7E92' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  background-size: 12px 8px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+.time-range select:focus { outline: none; border-bottom-color: var(--blue); }
+.time-sep { flex: 0 0 auto; font-size: 13px; color: var(--ink-soft); }
+
+/* 字段小注解：标签右侧的「可多选」与输入框下方的说明文字 */
+.label-hint {
+  font-size: 11px;
+  color: var(--ink-faint, #9fb0bd);
+  letter-spacing: 0;
+  margin-left: 4px;
+}
+.field-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ink-faint, #9fb0bd);
+  line-height: 1.5;
+}
+
 /* ---------- 邀请码块 ---------- */
 .invite-box {
   margin-top: 22px;
