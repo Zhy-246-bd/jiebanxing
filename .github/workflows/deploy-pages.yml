@@ -46,7 +46,8 @@ jobs:
       - name: 组装站点文件
         run: |
           touch site/.nojekyll
-          cp -r index.html index1.html demo.html result.html css js site/
+          # 用通配符而不是写死文件名：以后加/删临时验证页都不会让构建失败
+          cp -r *.html css js site/
           rm -f site/js/test-*.js
           echo "--- site 内容 ---"
           find site -type f | sort

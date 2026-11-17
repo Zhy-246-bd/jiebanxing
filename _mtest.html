@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>map-picker 移动端自检（临时页）</title>
+<style>body{margin:0;font:14px/1.6 -apple-system,sans-serif}#out{padding:12px;white-space:pre-wrap}</style>
+</head>
+<body>
+<pre id="out">running…</pre>
+<script src="js/config.local.js"></script>
+<script src="js/amap-api.js"></script>
+<script src="js/cities.js"></script>
+<script src="js/map-picker.js"></script>
+<script>
+(function () {
+  var lines = [];
+  function log(s) { lines.push(s); document.getElementById('out').textContent = lines.join('\n'); }
+
+  window.addEventListener('error', function (e) { log('JS ERROR: ' + (e.message || '') ); });
+
+  setTimeout(function () {
+    log('UA: ' + navigator.userAgent);
+    log('viewport: ' + window.innerWidth + 'x' + window.innerHeight);
+    log('AMap: ' + (window.AMap && window.AMap.Map ? 'loaded' : 'MISSING'));
+    log('JSKEY: ' + (window.__AMAP_JS_KEY__ ? 'set(' + window.__AMAP_JS_KEY__.length + ')' : 'EMPTY'));
+    log('JSCODE: ' + (window.__AMAP_JS_CODE__ ? 'set' : 'EMPTY'));
+    log('picker api: ' + (window.JBXMapPicker ? 'ok' : 'MISSING'));
+    try {
+      JBXMapPicker.open({
+        city: '武汉',
+        center: [114.3055, 30.5928],
+        onPick: function (r) { log('PICK: ' + r.name); }
+      });
+      log('open() called');
+    } catch (e) { log('open threw: ' + e.message); }
+
+    setTimeout(function () {
+      var mask = document.querySelector('.jbx-mp-mask');
+      var sheet = document.querySelector('.jbx-mp-sheet');
+      var stage = document.querySelector('.jbx-mp-stage');
+      var mapEl = document.querySelector('.jbx-mp-map');
+      var pin = document.querySelector('.jbx-mp-pin');
+      var err = document.querySelector('.jbx-mp-err');
+      var load = document.querySelector('.jbx-mp-loading');
+
+      var box = function (el) {
+        if (!el) return 'null';
+        var r = el.getBoundingClientRect();
+        return Math.round(r.width) + 'x' + Math.round(r.height);
+      };
+      log('--- 8s 后状态 ---');
+      log('mask: ' + box(mask) + (mask ? ' display=' + getComputedStyle(mask).display : ''));
+      log('sheet: ' + box(sheet));
+      log('stage: ' + box(stage));
+      log('mapEl: ' + box(mapEl));
+      log('err: hidden=' + (err && err.hasAttribute('hidden')) +
+          ' display=' + (err ? getComputedStyle(err).display : '-') +
+          ' z=' + (err ? getComputedStyle(err).zIndex : '-'));
+      log('loading: display=' + (load ? getComputedStyle(load).display : '-'));
+      log('pin: ' + box(pin) + ' visible=' + (pin ? getComputedStyle(pin).display : '-'));
+      log('map children: ' + (mapEl ? mapEl.children.length : 0));
+      var canv = mapEl ? mapEl.querySelectorAll('canvas') : [];
+      log('canvas count: ' + canv.length);
+      if (canv.length) log('canvas size: ' + canv[0].width + 'x' + canv[0].height);
+      log('amap nodes: ' + (mapEl ? mapEl.querySelectorAll('.amap-layers,.amap-container,[class^=amap]').length : 0));
+      log('addr text: ' + (document.querySelector('.jbx-mp-addr-txt') || {}).textContent);
+      log('ok disabled: ' + (document.querySelector('.jbx-mp-ok') || {}).disabled);
+      log('DONE');
+      document.title = 'RESULT ' + lines.join(' | ');
+    }, 8000);
+  }, 600);
+})();
+</script>
+</body>
+</html>

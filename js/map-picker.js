@@ -53,7 +53,9 @@
   function injectStyle() {
     if (document.getElementById(STYLE_ID)) return;
     var css = [
-      ".jbx-mp-mask{position:fixed;inset:0;z-index:9998;background:rgba(17,24,39,.45);",
+      // inset 简写在旧版安卓 WebView（Chrome < 87）不认，必须写全四个方向，
+      // 否则容器尺寸为 0 → 地图拿不到可用宽高，一片灰
+      ".jbx-mp-mask{position:fixed;top:0;right:0;bottom:0;left:0;z-index:9998;background:rgba(17,24,39,.45);",
       "  display:flex;align-items:flex-end;justify-content:center;",
       "  -webkit-tap-highlight-color:transparent;animation:jbx-mp-fade .18s ease-out}",
       "@keyframes jbx-mp-fade{from{opacity:0}to{opacity:1}}",
@@ -66,22 +68,25 @@
       "  border-bottom:1px solid #edf1f6;background:#fafcfe;font-weight:500}",
       ".jbx-mp-head b{color:#e53e3e}",
       ".jbx-mp-stage{position:relative;flex:1;min-height:200px;background:#eef2f6;overflow:hidden}",
-      ".jbx-mp-map{position:absolute;inset:0}",
+      ".jbx-mp-map{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%}",
       "/* 图钉：压在地图容器正中。pointer-events:none 是不挡住拖拽的关键 */",
       ".jbx-mp-pin{position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);",
       "  pointer-events:none;z-index:3;filter:drop-shadow(0 3px 4px rgba(0,0,0,.3))}",
       ".jbx-mp-pin::after{content:'';position:absolute;left:50%;bottom:-3px;width:9px;height:3px;",
       "  border-radius:50%;background:rgba(0,0,0,.25);transform:translateX(-50%)}",
       "/* 加载态：绝对不能白屏 */",
-      ".jbx-mp-loading{position:absolute;inset:0;z-index:4;display:flex;flex-direction:column;",
-      "  align-items:center;justify-content:center;gap:10px;background:#f4f7fa;",
+      ".jbx-mp-loading{position:absolute;top:0;right:0;bottom:0;left:0;z-index:4;display:flex;",
+      "  flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#f4f7fa;",
       "  font-size:13px;color:#718096}",
       ".jbx-mp-spin{width:22px;height:22px;border:2.5px solid #cbd8e6;border-top-color:#2b6cb0;",
       "  border-radius:50%;animation:jbx-mp-rot .8s linear infinite}",
       "@keyframes jbx-mp-rot{to{transform:rotate(360deg)}}",
-      ".jbx-mp-err{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;",
-      "  align-items:center;justify-content:center;gap:8px;padding:24px;background:#f4f7fa;",
-      "  text-align:center;font-size:13px;color:#718096;line-height:1.9}",
+      ".jbx-mp-err{position:absolute;top:0;right:0;bottom:0;left:0;z-index:5;display:flex;",
+      "  flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px;",
+      "  background:#f4f7fa;text-align:center;font-size:13px;color:#718096;line-height:1.9}",
+      "/* ★ 关键修复：上面的 display:flex 会盖掉浏览器对 hidden 属性的默认 display:none，",
+      "   结果错误层永远盖在地图上（灰底、看不到图钉和瓦片）。必须显式补这一条。 */",
+      ".jbx-mp-err[hidden]{display:none}",
       ".jbx-mp-err b{color:#2d3748;font-size:14px}",
       ".jbx-mp-err .jbx-mp-manual{margin-top:6px;border:1px solid #cbd8e6;background:#fff;",
       "  color:#2b6cb0;border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;font-family:inherit}",
@@ -270,6 +275,7 @@
       var ready = function () {
         if (first || self.destroyed) return;
         first = true;
+        self.fixZeroSize();             // 老机型容器量不到尺寸 → 强制给尺寸再 resize
         self.hideLoading();
         self.resolve();                 // 一打开就先解析一次中心点
       };
@@ -311,6 +317,24 @@
   /* ---------------- 状态：加载中 / 出错 / 地址 ---------------- */
   Picker.prototype.hideLoading = function () {
     if (this.loadingEl) this.loadingEl.style.display = "none";
+  };
+
+  /* 容器尺寸兜底：部分安卓/微信 WebView 在弹层动画期间量出来的宽高是 0，
+     地图虽然创建成功但整块不绘制（肉眼就是一片灰）。这里强制给一次尺寸再 resize。 */
+  Picker.prototype.fixZeroSize = function () {
+    var el = this.mapEl, stage = this.stageEl;
+    if (!el || !stage) return;
+    var w = el.offsetWidth, h = el.offsetHeight;
+    if (w > 0 && h > 0) return;
+    el.style.width = "100%";
+    el.style.height = "100%";
+    el.style.top = "0";
+    el.style.left = "0";
+    el.style.right = "0";
+    el.style.bottom = "0";
+    if (this.map && this.map.resize) {
+      try { this.map.resize(); } catch (e) { /* 忽略 */ }
+    }
   };
 
   Picker.prototype.showError = function (title, hint) {
