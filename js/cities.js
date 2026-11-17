@@ -98,8 +98,12 @@ function getCity(key) {
 function currentCity() { return _city; }
 function currentCityKey() { return _city.key; }
 
-/* 切换城市：同步刷新接口层配置 + 候选集合点 + 清空地名缓存
-   （必须清缓存：武汉的"中山公园"和上海的不是同一个地方，同名会串） */
+/* 切换城市：同步刷新接口层配置 + 候选集合点
+   ★ 不清 _geoCache / _routeCache：
+     ① 两类缓存的 key 都带城市前缀（AMAP_CITY + "|" + 地名），跨城市天然不串号；
+     ② doGenerate() 每次生成都会调本函数，清空会冲掉 seedCoord 预写的选点精确坐标
+        （成员/目的地从联想或地图选点拿到的官方 POI 坐标），导致又退回地理编码猜测。
+     历史注释曾写"必须清缓存"，那是 key 还没加城市前缀时的旧逻辑，现已作废。 */
 function applyCity(key) {
   var c = getCity(key) || CITIES[0];
   _city = c;
@@ -112,8 +116,8 @@ function applyCity(key) {
   if (typeof MEETING_CANDIDATES !== "undefined") {
     MEETING_CANDIDATES = c.stations.slice();
   }
-  if (typeof _geoCache !== "undefined") { _geoCache = {}; }
-  if (typeof _routeCache !== "undefined") { _routeCache = {}; }
+  /* 有意不清缓存：见上方函数注释。切城市靠 _ck() 的城市前缀隔离，
+     seedCoord 注入的选点坐标必须跨 applyCity 存活。 */
 
   try { localStorage.setItem(CITY_STORE_KEY, c.key); } catch (e) { /* 无 localStorage 环境忽略 */ }
   return c;
