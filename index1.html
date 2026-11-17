@@ -424,7 +424,17 @@
           </div>
           <div class="field">
             <label>本人出发地</label>
-            <input id="fromInput" name="from" type="text" placeholder="输入小区/地铁站/学校名，从列表里选准位置">
+            <!-- 2026-11-16 地图选点：手打地名容易解析偏，点地图拿官方坐标。
+                 布局用行内 style，不动 css/style1.css（陈滢竹的文件）。 -->
+            <div style="display:flex;gap:8px;align-items:stretch">
+              <input id="fromInput" name="from" type="text" style="flex:1;min-width:0"
+                     placeholder="输入小区/地铁站/学校名，从列表里选准位置">
+              <button type="button" id="fromPickBtn"
+                      title="在地图上拖动选点"
+                      style="flex:none;border:1px solid #cbd8e6;background:#ebf4ff;color:#2b6cb0;
+                             border-radius:10px;padding:0 12px;font-size:13px;font-family:inherit;
+                             cursor:pointer;white-space:nowrap">📍 地图选点</button>
+            </div>
           </div>
 
           <div class="field">
@@ -628,6 +638,9 @@
   <script src="js/engine.js?v=1115b"></script>
   <script src="js/cloud-config.js?v=1117a"></script>
   <script src="js/cloud-api.js?v=1117a"></script>
+  <!-- 出发地地图选点：JS API 在点按钮时才懒加载，首页不额外下载地图 SDK -->
+  <script src="js/map-picker.js?v=1116a"
+          onerror="console.info('%c[结伴行] 未找到 js/map-picker.js，地图选点不可用，可手动输入出发地。','color:#e67e22')"></script>
 
   <script>
   /* ==========================================================
@@ -1156,6 +1169,46 @@
 
     let pickedFrom = null;          // 本人出发地的精确坐标（点选才有）
     attachTips($('#fromInput'), t => { pickedFrom = t ? { lng: t.lng, lat: t.lat } : null; });
+
+    /* ── 出发地「地图选点」（2026-11-16）────────────────────────────
+       手打地名 → 地理编码取第一个匹配，是"出发地坐标不准"的根因；
+       地图选点拿的是官方底图上的点，坐标就是用户看到的那个位置。
+       选完做两件事：① 回填输入框 ② pickedFrom 写坐标（提交时存进 origin_lng/lat）
+       ③ seedCoord 把坐标预写进解析缓存，本机生成方案时连地理编码都省了。 */
+    (function bindFromPicker() {
+      const btn = document.getElementById('fromPickBtn');
+      if (!btn) return;
+
+      btn.addEventListener('click', () => {
+        if (typeof JBXMapPicker === 'undefined') {
+          toast('地图选点组件未加载，请手动输入出发地');
+          return;
+        }
+        const city = (typeof currentCity === 'function') ? currentCity() : null;
+        const center = (city && city.center) ? city.center.split(',').map(Number) : null;
+
+        JBXMapPicker.open({
+          city: (city && city.name) || state.cityName || '',
+          center: (center && isFinite(center[0]) && isFinite(center[1])) ? center : undefined,
+          lnglat: pickedFrom ? [pickedFrom.lng, pickedFrom.lat] : undefined,
+          onPick: function (r) {
+            $('#fromInput').value = r.name;
+            $('#fromInput').classList.remove('error');
+            pickedFrom = { lng: r.lng, lat: r.lat, name: r.name };
+            if (typeof seedCoord === 'function') {
+              seedCoord(r.name, r.lng, r.lat, r.adcode || state.cityCode);
+            }
+            toast('已选中：' + (r.name.length > 16 ? r.name.slice(0, 16) + '…' : r.name));
+          }
+        });
+      });
+
+      // 选完点又手动改字：作废旧坐标，否则会出现"名字是新地名、坐标还是老坐标"
+      $('#fromInput').addEventListener('input', () => {
+        const v = $('#fromInput').value.trim();
+        if (pickedFrom && v !== (pickedFrom.name || '')) pickedFrom = null;
+      });
+    })();
 
     let pickedMemberFrom = null;    // 发起人代填成员的精确坐标
     attachTips($('#memberFromInput'), t => { pickedMemberFrom = t ? { lng: t.lng, lat: t.lat } : null; });
