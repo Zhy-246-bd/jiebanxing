@@ -80,7 +80,10 @@ function _coordOf(name) {
   var task;
   try { task = _geoResolve(name); } catch (e) { return Promise.resolve(null); }
   return Promise.resolve(task).then(function (r) {
-    return (r && r.ok && isFinite(r.lng) && isFinite(r.lat)) ? { lng: r.lng, lat: r.lat } : null;
+    // ⚠ isFinite(null) === true：脏缓存里的 null 会被当成 0，算出来是几内亚湾到中国的距离
+    var good = r && r.ok && r.lng != null && r.lat != null && r.lng !== "" && r.lat !== "" &&
+               isFinite(r.lng) && isFinite(r.lat);
+    return good ? { lng: r.lng, lat: r.lat } : null;
   }).catch(function () { return null; });
 }
 

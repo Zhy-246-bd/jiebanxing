@@ -44,6 +44,15 @@
   var JS_KEY  = pickKey(g, ["__AMAP_JS_KEY__", "JS_API_KEY", "AMAP_JS_KEY"]);
   var JS_CODE = pickKey(g, ["__AMAP_JS_CODE__", "JS_API_SECURITY_CODE", "AMAP_SECURITY_CODE"]);
 
+  /* 坐标"真的存在"才算数：isFinite(null) 和 isFinite("") 都是 true，
+     只写 isFinite 会把"没坐标"当成坐标 0（几内亚湾）。
+     2026-11-19 闫雅欣：map-view 里所有坐标判空统一走这里。 */
+  function hasCoord(lng, lat) {
+    return lng !== null && lng !== undefined && lng !== "" &&
+           lat !== null && lat !== undefined && lat !== "" &&
+           isFinite(lng) && isFinite(lat);
+  }
+
   var MODE_COLOR = { transit: "#3182ce", taxi: "#dd6b20", bike: "#38a169" };
   var TIMEOUT_MS = 15000;     // 单次路线规划 / 地名解析的超时
   var MIN_INTERVAL_MS = 600;  // 两次请求的最小间隔：个人 Key 约 3 QPS，连着打会被限频（10021）
@@ -230,7 +239,10 @@
         var lng = Number(p[0]), lat = Number(p[1]);
         return (isFinite(lng) && isFinite(lat)) ? [lng, lat] : null;
       }
-      return (isFinite(loc.lng) && isFinite(loc.lat)) ? [loc.lng, loc.lat] : null;
+      // ⚠ isFinite(null) === true、isFinite('') === true：这里必须显式排除空值，
+      //   否则"没有坐标"会变成 [0, 0]，蓝点画到几内亚湾去。
+      if (!hasCoord(loc.lng, loc.lat)) return null;
+      return [Number(loc.lng), Number(loc.lat)];
     }
     /* POI 检索：地铁站/景点/广场这类名字用它最准 */
     function byPoi(name, limitCity) {
@@ -425,12 +437,15 @@
      * 只有缺坐标的地名才去高德重新解析。
      * 否则用户在小区门口选的点会被地名解析回小区中心或别的门，地图上的蓝点就不是他选的位置。 */
     var exact = {};
+    /* ⚠ 判断"坐标真的存在"不能只写 isFinite（isFinite(null) === true、isFinite('') === true），
+       否则"没选点"会被当成坐标 0，蓝点画到几内亚湾，setFitView 还会把地图缩成世界视野。
+       2026-11-19 闫雅欣：加 hasCoord 统一判空。 */
     (data.members || []).forEach(function (m) {
-      if (m && m.origin && m.coord && isFinite(m.coord.lng) && isFinite(m.coord.lat)) {
+      if (m && m.origin && m.coord && hasCoord(m.coord.lng, m.coord.lat)) {
         exact[m.origin] = [Number(m.coord.lng), Number(m.coord.lat)];
       }
     });
-    if (info.dest && data.destCoord && isFinite(data.destCoord.lng) && isFinite(data.destCoord.lat)) {
+    if (info.dest && data.destCoord && hasCoord(data.destCoord.lng, data.destCoord.lat)) {
       exact[info.dest] = [Number(data.destCoord.lng), Number(data.destCoord.lat)];
     }
     var needGeo = info.places.filter(function (p) { return !exact[p]; });
@@ -500,7 +515,8 @@
           if (!r) return;
           var key = r.seg.from + "|" + r.seg.to + "|" + r.seg.mode;
           bySeg[key] = r.path;
-          if (!r.path) failures.push(r.seg.from + "→" + r.seg.to + "（" + r.kind + " " + r.status + "）");
+          if (!r.path) failures.push(r.seg.from + "→" + r.seg.to +
+            "（" + ((r.kind ? r.kind + " " : "") + r.status) + "）");   // 坐标缺失时 kind 为空，别拼出 "undefined"
         });
 
         function mkLine(seg) {

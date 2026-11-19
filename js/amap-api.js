@@ -514,7 +514,11 @@ function inputTips(keyword, city) {
  * @param {string} [adcode]  选点所属 adcode，缺省用当前城市
  */
 function seedCoord(name, lng, lat, adcode) {
-  if (!name || !isFinite(lng) || !isFinite(lat)) return false;
+  // ⚠ isFinite(null) === true、isFinite("") === true：只判 isFinite 会把"没选点"当成 (0,0)
+  //   写成一条 source:"选点" 的缓存，那个地名从此再也不去高德查（假距离的来源之一）。
+  //   2026-11-19 闫雅欣
+  if (!name || lng == null || lat == null || lng === "" || lat === "" ||
+      !isFinite(lng) || !isFinite(lat)) return false;
   var n = String(name).trim();
   _cacheSet(_geoCache, _ck(n), {
     ok: true, lng: lng, lat: lat,

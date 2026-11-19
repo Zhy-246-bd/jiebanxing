@@ -219,8 +219,10 @@
       member_token: token,
       name: me.name,
       origin: me.origin,
-      origin_lng: (me.originCoord && isFinite(me.originCoord.lng)) ? me.originCoord.lng : null,
-      origin_lat: (me.originCoord && isFinite(me.originCoord.lat)) ? me.originCoord.lat : null,
+      // ⚠ isFinite(null) === true：不加 != null 会把"没选点"当成坐标 0 存进库，
+      //   别的设备取出来就是一个 (0,0) 的假坐标。2026-11-19 闫雅欣
+      origin_lng: (me.originCoord && me.originCoord.lng != null && me.originCoord.lng !== "" && isFinite(me.originCoord.lng)) ? me.originCoord.lng : null,
+      origin_lat: (me.originCoord && me.originCoord.lat != null && me.originCoord.lat !== "" && isFinite(me.originCoord.lat)) ? me.originCoord.lat : null,
       mode: me.mode || "transit",
       budget: Number(me.budget) || 0,
       win_start: me.winStart || null,
