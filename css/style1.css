@@ -1236,3 +1236,19 @@ button, input, select, textarea { font-family: inherit; }
   .gen-loading-spinner { animation-duration: 2.4s; }
 }
 
+
+/* 上次房间快速回入条：封面按钮下方，一键回到房间不用重输邀请码 */
+.resume-bar {
+  margin: 16px auto 0;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--ink-faint, #9fb0bd);
+}
+.resume-bar b {
+  color: var(--ink, #3a4249);
+  letter-spacing: .08em;
+}
