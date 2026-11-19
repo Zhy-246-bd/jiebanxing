@@ -1617,6 +1617,9 @@
       return {
         name: m.name,
         origin: m.startFrom,
+        // 地图选点/联想拿到的精确坐标随方案一起上云：结果页地图直接用它画蓝点，
+        // 不再拿地名重新解析（否则小区门口会被解析回小区中心，蓝点就偏了）
+        coord: m.startCoord || null,
         mode: mode,
         budget: parseFloat(String(m.budget).replace(/[^\d.]/g, '')) || 0,
         window: parseWindow(m.window)
@@ -1637,6 +1640,8 @@
       }).then(result => {
         const payload = {
           dest: state.dest,
+          // 目的地选点坐标（编辑目的地时可能被清空，为空就由结果页按地名解析兜底）
+          destCoord: pickedDest ? { lng: pickedDest.lng, lat: pickedDest.lat } : null,
           city: state.cityName || currentCity().name,
           members: membersForEngine,
           result: result
@@ -1872,7 +1877,7 @@
 
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡、不挡点击，答辩前留着也无妨。 -->
-  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1119f</div>
+  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1119g</div>
 
 </body>
 </html>

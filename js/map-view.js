@@ -420,14 +420,29 @@
 
     var map = new AMap.Map(area, { zoom: 12, resizeEnable: true });
 
-    /* ---- 8.1 解析全部地点坐标 ---- */
-    setHint("正在定位 " + info.places.length + " 个地点…");
+    /* ---- 8.1 解析全部地点坐标 ----
+     * 优先用方案里带的精确坐标（成员在地图上选的点 / 联想选的点，随 jbx_result 一起上云）；
+     * 只有缺坐标的地名才去高德重新解析。
+     * 否则用户在小区门口选的点会被地名解析回小区中心或别的门，地图上的蓝点就不是他选的位置。 */
+    var exact = {};
+    (data.members || []).forEach(function (m) {
+      if (m && m.origin && m.coord && isFinite(m.coord.lng) && isFinite(m.coord.lat)) {
+        exact[m.origin] = [Number(m.coord.lng), Number(m.coord.lat)];
+      }
+    });
+    if (info.dest && data.destCoord && isFinite(data.destCoord.lng) && isFinite(data.destCoord.lat)) {
+      exact[info.dest] = [Number(data.destCoord.lng), Number(data.destCoord.lat)];
+    }
+    var needGeo = info.places.filter(function (p) { return !exact[p]; });
+
+    setHint("正在定位 " + needGeo.length + " 个地点…");
     var geo = makeGeocoder(AMap, data.city || "全国");
-    runPool(info.places.map(function (p) {
+    runPool(needGeo.map(function (p) {
       return function () { return geo.one(p).then(function (c) { return { name: p, coord: c }; }); };
     }), MAX_CONCURRENT, function (d, n) { setHint("正在定位地点 " + d + "/" + n + "…"); })
     .then(function (rs) {
       var coords = {}, missed = [];
+      Object.keys(exact).forEach(function (k) { coords[k] = exact[k]; });
       (rs || []).forEach(function (r) {
         if (r && r.coord) coords[r.name] = r.coord; else if (r) missed.push(r.name);
       });
