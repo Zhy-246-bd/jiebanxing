@@ -1,10 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>结伴行 · 短途结伴出游</title>
-  <link rel="stylesheet" href="css/style1.css?v=1119f">
+  <link rel="stylesheet" href="css/style1.css?v=1119h">
 </head>
 <body class="home">
 
@@ -419,6 +419,22 @@
   </div>
 
   <!-- ============================================================
+       出发地无法解析 提示（#origin-warn-modal，默认隐藏）
+       生成方案前发现有人填了本市查不到的地名时弹出，阻止生成
+       ============================================================ -->
+  <div class="modal-mask" id="origin-warn-modal" role="dialog" aria-modal="true" aria-label="出发地无法解析">
+    <div class="modal">
+      <h3>有成员的出发地在「<span id="originWarnCity"></span>」查不到</h3>
+      <p class="sub-hint">房间城市是固定的。这些地名在本市解析不到坐标，系统只能按估算距离出方案——数字看着正常，其实不可信，所以这次不让生成。</p>
+      <div id="originWarnList" class="origin-warn-list"></div>
+      <p class="sub-hint">让这几位重新填写，从下拉候选里点选本市地点，或用「📍 地图选点」直接在地图上点。</p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-close="origin-warn-modal">我知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
        视图4：个人信息填写
        ============================================================ -->
   <section class="view form-page" id="person">
@@ -650,7 +666,7 @@
   <script src="js/config.local.js?v=1116b"
           onerror="console.info('%c[结伴行] 未找到 js/config.local.js，本次将使用本地估算数据。','color:#e67e22')"></script>
   <script src="js/formats.js?v=1115b"></script>
-  <script src="js/amap-api.js?v=1115b"></script>
+  <script src="js/amap-api.js?v=1119h"></script>
   <script src="js/cities.js?v=1115b"></script>
   <script src="js/cities-all.js?v=1119b"></script>
   <script src="js/city-online.js?v=1115b"></script>
@@ -1329,6 +1345,9 @@
       $('#fromInput').addEventListener('input', () => {
         const v = $('#fromInput').value.trim();
         if (pickedFrom && v !== (pickedFrom.name || '')) pickedFrom = null;
+        const h = document.getElementById('fromCheckHint');   // 改字就收起上次的校验提示
+        if (h) h.textContent = '';
+        $('#fromInput').classList.remove('error');
       });
     })();
 
@@ -1372,30 +1391,48 @@
 
       const btn = personForm.querySelector('button[type="submit"]');
       btn.disabled = true;
-      btn.textContent = '正在提交…';
+      btn.textContent = '正在核对出发地…';
 
-      // 同一台设备重复提交 = 更新自己那一行，不会变成两个人（云端按 member_token 判重）
-      Cloud.joinRoom(state.inviteCode, {
-        name: name,
-        origin: from,
-        originCoord: pickedFrom,               // 从联想里选过才有，手打的为 null
-        mode: modes.join(','),
-        budget: budgetNum,
-        winStart: winStartVal,
-        winEnd: winEndVal
-      }).then(() => syncRoom(state.inviteCode))
-        .then(() => {
-          persistRoom();
-          renderRoom();
-          showView('room');
-          startPolling();          // 进房间就开轮询，别人填完这边能自动刷新
-          toast('信息已提交，等待其他伙伴');
-        })
-        .catch(err => toast(err.message || '提交失败，请重试'))
-        .then(() => {
+      // 提交前最后一道关：出发地必须能在「房间城市」里解析成坐标。
+      // 手打一个外市地名时（汕头房间里填"武汉江汉路"）联想是空的，看着只是"没提示"，
+      // 但算方案时会走本地估算、编一个 2~20km 的假距离，方案照样出结果、数字全错。
+      // 查不到就拦下，让他从候选里点选或用「地图选点」（两者都是本市官方坐标）。
+      ensureOriginResolvable(from, pickedFrom).then(res => {
+        if (!res.ok) {
           btn.disabled = false;
           btn.textContent = '完成填写 · 进入房间';
-        });
+          $('#fromInput').classList.add('error');
+          const other = detectForeignCity(from);
+          toast('「' + from + '」在' + (state.cityName || '房间城市') + '查不到');
+          fromInputHint('这个地点在' + (state.cityName || '房间城市') + '里找不到。'
+            + (other ? '「' + from + '」看起来是' + other + '的地点，而房间城市固定是' + (state.cityName || '当前城市') + '。' : '')
+            + '请从下方候选里点选一个本市地点，或点「📍 地图选点」直接在地图上点。');
+          return;
+        }
+        btn.textContent = '正在提交…';
+        // 同一台设备重复提交 = 更新自己那一行，不会变成两个人（云端按 member_token 判重）
+        Cloud.joinRoom(state.inviteCode, {
+          name: name,
+          origin: from,
+          originCoord: pickedFrom,               // 从联想里选过才有，手打的为 null
+          mode: modes.join(','),
+          budget: budgetNum,
+          winStart: winStartVal,
+          winEnd: winEndVal
+        }).then(() => syncRoom(state.inviteCode))
+          .then(() => {
+            persistRoom();
+            renderRoom();
+            showView('room');
+            startPolling();          // 进房间就开轮询，别人填完这边能自动刷新
+            toast('信息已提交，等待其他伙伴');
+          })
+          .catch(err => toast(err.message || '提交失败，请重试'))
+          .then(() => {
+            btn.disabled = false;
+            btn.textContent = '完成填写 · 进入房间';
+          });
+      });
     });
 
     // ==========================================================
@@ -1626,15 +1663,107 @@
       };
     }
 
+    // ---- 出发地可解析性校验（成员提交时 + 发起人生成方案前，两处共用）----
+    // 有选点坐标（联想点选 / 地图选点）→ 直接通过，并把坐标写进解析缓存，
+    //   之后引擎算路用的就是这份官方坐标，不再按地名重查；
+    // 手打文本 → 在「房间城市」范围内解析一次，成功同样写进缓存，失败返回 ok:false。
+    // 网络异常按通过处理（不拿网络问题卡住用户），由生成前预检做最终兜底。
+    function ensureOriginResolvable(text, coord) {
+      if (coord && isFinite(coord.lng) && isFinite(coord.lat)) {
+        if (typeof seedCoord === 'function') seedCoord(text, coord.lng, coord.lat, state.cityCode);
+        return Promise.resolve({ ok: true, source: 'picked' });
+      }
+      if (!text || typeof _geoResolve !== 'function') return Promise.resolve({ ok: true, skipped: true });
+      return Promise.resolve(_geoResolve(text)).then(r => {
+        if (r && r.ok && isFinite(r.lng) && isFinite(r.lat)) {
+          if (typeof seedCoord === 'function') seedCoord(text, r.lng, r.lat, r.adcode);
+          return { ok: true, source: r.source };
+        }
+        return { ok: false, skipped: false };
+      }).catch(() => ({ ok: true, skipped: true }));
+    }
+
+    // 出发地校验失败的常驻提示：toast 一闪就没，这条留在输入框下面直到改对
+    function fromInputHint(msg) {
+      let el = document.getElementById('fromCheckHint');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'fromCheckHint';
+        el.className = 'field-hint';
+        el.style.color = '#c53030';
+        const row = $('#fromInput').closest('div');
+        row.parentNode.insertBefore(el, row.nextSibling);
+      }
+      el.textContent = msg;
+    }
+
+    // 输入里带别的城市名时直接点名，比"查不到"好懂（"武汉江汉路步行街" → 武汉）。
+    // 只用于提示措辞：解析成功的不会被拦，所以就算误报（比如某市的"北京路"）也没副作用。
+    function detectForeignCity(text) {
+      if (!window.CITIES_ALL || !text || !CITIES_ALL.length) return '';
+      const my = String(state.cityName || '').replace(/市$/, '');
+      for (let i = 0; i < CITIES_ALL.length; i++) {
+        const n = CITIES_ALL[i].n;
+        if (!n || n.length < 2 || n === my) continue;
+        if (text.indexOf(n) >= 0) return n;
+      }
+      return '';
+    }
+
+    function showOriginProblem(bad) {
+      $('#originWarnCity').textContent = state.cityName || '当前城市';
+      const box = $('#originWarnList');
+      box.innerHTML = '';
+      bad.forEach(m => {
+        const row = document.createElement('div');
+        row.className = 'origin-warn-item';
+        const who = document.createElement('b');
+        who.textContent = m.name || '成员';
+        const where = document.createElement('span');
+        const other = detectForeignCity(m.origin);
+        where.textContent = (m.origin || '未填写') + (other ? '（' + other + '的地点）' : '');
+        row.appendChild(who);
+        row.appendChild(where);
+        box.appendChild(row);
+      });
+      openModal('origin-warn-modal');
+    }
+
     function doGenerate() {
       const btn = $('#fullBtn');
       const oldText = btn.textContent;
       btn.disabled = true;
-      btn.textContent = '正在解析出发地…';
+      btn.textContent = '正在核对出发地…';
       applyCity(state.cityKey);   // 引擎按"当前城市"解析地名，这里必须切回去
 
       const membersForEngine = state.members.map(toEngineMember);
 
+      // 生成前预检：先把每个人的出发地变成"确定的坐标"再交给引擎。
+      // 这是拦假数据的关键——engine 在地名解析失败时会用 _estimate 编一个
+      // 2~20km 的哈希距离，方案照样算得出来，但数字和真实情况无关
+      // （11-19 汕头房间实测：成员填了武汉的地点，方案照算不误，谁都没提示）。
+      Promise.all(membersForEngine.map(m => ensureOriginResolvable(m.origin, m.coord))).then(list => {
+        const bad = membersForEngine.filter((m, i) => !list[i].ok);
+        if (bad.length) {
+          btn.disabled = false;
+          btn.textContent = oldText;
+          showOriginProblem(bad);
+          return null;
+        }
+        // 目的地同理：解析不到的话，整条路线的距离都是估的
+        return ensureOriginResolvable(state.dest, pickedDest).then(dr => {
+          if (!dr.ok) {
+            btn.disabled = false;
+            btn.textContent = oldText;
+            toast('目的地「' + state.dest + '」在' + (state.cityName || '房间城市') + '查不到，请回房间重新填目的地');
+            return null;
+          }
+          return runGenerate(membersForEngine, btn, oldText);
+        });
+      });
+    }
+
+    function runGenerate(membersForEngine, btn, oldText) {
       generateSchemes(membersForEngine, state.dest, {
         onStage: s => { btn.textContent = s; }
       }).then(result => {
@@ -1877,7 +2006,7 @@
 
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡、不挡点击，答辩前留着也无妨。 -->
-  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1119g</div>
+  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1119h</div>
 
 </body>
 </html>

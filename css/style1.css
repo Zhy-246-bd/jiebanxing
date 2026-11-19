@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
  * style1.css — 结伴行 · 短途结伴出游
  * 【2026-11-13 · 本文件为新修改文件】配套 index1.html 使用；
  * 原始未改动样式为 css/style.css（未做任何改动）
@@ -1044,6 +1044,8 @@ button, input, select, textarea { font-family: inherit; }
 
 .modal {
   width: min(420px, 100%);
+  /* 手机端保命：页面有横向溢出时 100% 会比视口还宽，弹窗被裁掉半边（11-19 实测 390px） */
+  max-width: calc(100vw - 32px);
   background: #fff;
   border-radius: 18px;
   padding: 32px 28px 26px;
@@ -1289,4 +1291,32 @@ button, input, select, textarea { font-family: inherit; }
   text-align: center;
   font-size: 13px;
   color: var(--ink-faint, #9fb0bd);
+}
+
+/* 出发地无法解析清单：生成方案前拦下来，逐条列出「谁 / 填了什么」 */
+.origin-warn-list {
+  margin: 12px 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.origin-warn-item {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--paper, #f7f4ee);
+  border: 1px solid var(--line, #e3ddd1);
+  font-size: 13px;
+}
+.origin-warn-item b {
+  flex: none;
+  color: var(--ink, #3a4249);
+}
+.origin-warn-item span {
+  color: var(--ink-faint, #9fb0bd);
+  word-break: break-all;
 }

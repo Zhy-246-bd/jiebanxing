@@ -182,12 +182,28 @@ function _distanceKm(a, b) {
 /* 名称相似度：去掉"地铁站/广场/停车位"这类通用后缀后比字符交集，
    避免"滨江路站"被解析成"玉桥东一路-道路停车位" */
 var _STRIP = /(地铁站|地铁|车站|站|广场|中心|停车位|停车场|大厦|门店)$/g;
+function _stripName(x) { return String(x).replace(/[（()）\s]/g, "").replace(_STRIP, ""); }
 function _similarNum(a, b) {
-  var strip = function (x) { return String(x).replace(/[（()）\s]/g, "").replace(_STRIP, ""); };
-  var A = strip(a), B = strip(b), set = {}, n = 0;
+  var A = _stripName(a), B = _stripName(b), set = {}, n = 0;
   for (var i = 0; i < A.length; i++) set[A[i]] = 1;
   for (var j = 0; j < B.length; j++) if (set[B[j]]) { n++; delete set[B[j]]; }
   return n;
+}
+
+/* 名称是否可信：短名的字要基本都出现在解析结果里（≥70%）。
+   为什么必须有这道关（2026-11-19 汕头房间实测）：高德在 citylimit 下会
+   **硬凑一个形似的地名**，60km 距离校验完全拦不住——
+     "武汉江汉路步行街" → 汕头市金平区"步行街"（5.1km）
+     "武汉大学"        → "武大郎烧饼(东山大道店)"（13.1km）
+     "武汉黄鹤楼"      → "黄鹤楼(澄海店)"（15.9km）
+   结果成员填的外市地点被当成本市真实地点，方案算得又快又"正常"，全是错的。
+   归一化用 min 长度做分母：合法解析时输入名几乎整体出现在地址里（≈100%），
+   硬凑出来的形似名只会撞上一两个字（≤50%）。 */
+function _nameMatch(input, cand) {
+  var A = _stripName(input), B = _stripName(cand || "");
+  if (!A || !B) return false;
+  var hit = _similarNum(input, cand), base = Math.min(A.length, B.length);
+  return hit >= 2 && hit / base >= 0.7;
 }
 
 /* ---------------- ② 地名 → 坐标 ---------------- */
@@ -207,6 +223,7 @@ function _lookupOne(name) {
     var p = _toLngLat(loc);
     if (!p) return null;
     if (center && _distanceKm(center, p) > MAX_GEO_DISTANCE_KM) return null; // 解析到外省，判错
+    if (!_nameMatch(name, addr)) return null;   // 名称对不上：高德硬凑的形似地名，不认（见 _nameMatch）
     return { ok: true, lng: p.lng, lat: p.lat, adcode: adcode || AMAP_CITY_ADCODE, name: addr || name, source: source };
   };
 
