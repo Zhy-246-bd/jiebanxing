@@ -100,6 +100,14 @@
     return res ? res.data : null;
   }
 
+  /* 一个坐标值是否「真的存在」。
+   * ⚠ 不能只写 isFinite：JS 里 isFinite(null) === true、isFinite('') === true，
+   *   "没选点"会被当成"坐标是 0"，存进库再取出来就是一个 (0,0) 的假坐标。
+   *   必须显式排除 null / undefined / 空串。 */
+  function hasCoord(v) {
+    return v !== null && v !== undefined && v !== "" && isFinite(v);
+  }
+
   /* ---------------- 本机身份 ---------------- */
 
   function deviceToken() {
@@ -219,8 +227,10 @@
       member_token: token,
       name: me.name,
       origin: me.origin,
-      origin_lng: (me.originCoord && isFinite(me.originCoord.lng)) ? me.originCoord.lng : null,
-      origin_lat: (me.originCoord && isFinite(me.originCoord.lat)) ? me.originCoord.lat : null,
+      // ⚠ isFinite(null) === true（JS 陷阱），只判 isFinite 会把"没选点"当成坐标 0 上云，
+      //   下游再取出来就是一个 (0,0) 的坐标。必须同时排除 null / undefined。
+      origin_lng: hasCoord(me.originCoord && me.originCoord.lng) ? me.originCoord.lng : null,
+      origin_lat: hasCoord(me.originCoord && me.originCoord.lat) ? me.originCoord.lat : null,
       mode: me.mode || "transit",
       budget: Number(me.budget) || 0,
       win_start: me.winStart || null,

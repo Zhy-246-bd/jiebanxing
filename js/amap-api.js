@@ -451,7 +451,11 @@ function inputTips(keyword, city) {
  * @param {string} [adcode]  选点所属 adcode，缺省用当前城市
  */
 function seedCoord(name, lng, lat, adcode) {
-  if (!name || !isFinite(lng) || !isFinite(lat)) return false;
+  // ⚠ isFinite(null) === true（JS 陷阱）。只判 isFinite 会把 null 坐标写进缓存，
+  //   该地名从此解析成 (0,0)，路线全跑到几内亚湾去。必须同时排除 null / undefined。
+  if (!name || lng === null || lng === undefined || lng === "" ||
+      lat === null || lat === undefined || lat === "" ||
+      !isFinite(lng) || !isFinite(lat)) return false;
   var n = String(name).trim();
   _cacheSet(_geoCache, _ck(n), {
     ok: true, lng: lng, lat: lat,

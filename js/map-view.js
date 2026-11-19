@@ -230,6 +230,8 @@
         var lng = Number(p[0]), lat = Number(p[1]);
         return (isFinite(lng) && isFinite(lat)) ? [lng, lat] : null;
       }
+      // ⚠ isFinite(null) === true：loc.lng 为 null 时会被当成 0（几内亚湾）
+      if (loc.lng === null || loc.lng === undefined || loc.lat === null || loc.lat === undefined) return null;
       return (isFinite(loc.lng) && isFinite(loc.lat)) ? [loc.lng, loc.lat] : null;
     }
     /* POI 检索：地铁站/景点/广场这类名字用它最准 */
@@ -425,12 +427,20 @@
      * 只有缺坐标的地名才去高德重新解析。
      * 否则用户在小区门口选的点会被地名解析回小区中心或别的门，地图上的蓝点就不是他选的位置。 */
     var exact = {};
+    /* ⚠ 判断坐标「真的存在」不能只写 isFinite：isFinite(null) === true，
+       会把"没有坐标"当成坐标 0，再经 Number() 变成 [0, 0]——
+       地图上就是一个画到几内亚湾的蓝点。必须同时排除 null / undefined / 空串。 */
+    function hasCoord(lng, lat) {
+      return lng !== null && lng !== undefined && lng !== '' &&
+             lat !== null && lat !== undefined && lat !== '' &&
+             isFinite(lng) && isFinite(lat);
+    }
     (data.members || []).forEach(function (m) {
-      if (m && m.origin && m.coord && isFinite(m.coord.lng) && isFinite(m.coord.lat)) {
+      if (m && m.origin && m.coord && hasCoord(m.coord.lng, m.coord.lat)) {
         exact[m.origin] = [Number(m.coord.lng), Number(m.coord.lat)];
       }
     });
-    if (info.dest && data.destCoord && isFinite(data.destCoord.lng) && isFinite(data.destCoord.lat)) {
+    if (info.dest && data.destCoord && hasCoord(data.destCoord.lng, data.destCoord.lat)) {
       exact[info.dest] = [Number(data.destCoord.lng), Number(data.destCoord.lat)];
     }
     var needGeo = info.places.filter(function (p) { return !exact[p]; });

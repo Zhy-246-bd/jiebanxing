@@ -52,3 +52,5 @@ desktop.ini
 
 # One-off scripts (city data generator / local simulation), never commit
 _*.js
+# One-off local verification pages (headless-browser test harness), never commit
+_*.html
