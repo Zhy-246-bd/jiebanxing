@@ -153,7 +153,14 @@ button, input, select, textarea { font-family: inherit; }
      之前圆头会在"未起笔"时把虚线端点渲染成墨点，现用 pathShow
      让每条笔画到自己的起笔时间才显示，彻底消除起笔前的墨点 */
   stroke-linecap: round; stroke-linejoin: round;
-  stroke-dasharray: 1 1; stroke-dashoffset: 1;
+  /* 【跨端一致·陈涨竹 11-18】不依赖 SVG pathLength 归一化：
+     pathLength="1" 让 stroke-dasharray:1 等于整条笔画长度，桌面 Chromium 正常，
+     但移动端 WebKit（iOS Safari / 微信内置浏览器）会把 1 当 1px 处理，
+     笔画变成一串小点、与电脑端呈现完全不同。
+     现改为由脚本读取每条笔画的真实长度写成内联 dash 值（见 index1.html），
+     两端走完全相同的描边动画；无脚本时降级为完整显示，不再点状错乱。 */
+  stroke-dasharray: none;
+  stroke-dashoffset: 0;
   opacity: 0;
   animation: inkDraw var(--t, .4s) linear var(--d, 0s) forwards,
              pathShow .01s linear var(--d, 0s) forwards;
@@ -1170,9 +1177,11 @@ button, input, select, textarea { font-family: inherit; }
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
   }
-  .ink-path { stroke-dashoffset: 0; }
-  .ink-fill { opacity: 1; }
-  .cover-actions, .cover-eyebrow { opacity: 1; }
+  /* 减弱动态偏好下直接显示完整字形：否则 ink-path 的 opacity 仍受
+     animation-delay(--d) 控制，笔画会按笔顺一截一截瞬间跳出，观感错乱 */
+  .ink-path, .ink-fill, .ink-text { animation: none !important; }
+  .ink-path { opacity: 1; stroke-dashoffset: 0; }
+  .ink-fill, .cover-actions, .cover-eyebrow { opacity: 1; }
   .card:hover { transform: none; }
   /* 减少动态偏好：小车停靠、虚线与路边草保持静止 */
   .car-drive { animation: none; transform: translateX(70vw); }

@@ -56,5 +56,340 @@
 
    ============================================================================ */
 
-/* 在下面写你的样式 */
+/* ----------------------------------------------------------------------------
+   【2026-11-17 · 结果页配色收尾】
+   把结果页遗留的冷蓝灰（#87A8BC / #5B7E92 系）统一到封面、首页的暖色语言：
+   米白底 + 沙米块 + 暖橙点缀 + 墨色文字。
 
+   · 颜色优先复用 style1.css 已定义的 --bg / --sand / --orange / --ink /
+     --ink-soft；变量缺失时在同一处回落成同款色值，其余规则只引用本地变量，
+     不再散落十六进制色号。
+   · 地图模块（#mapBox / .jbx-tab / .jbx-legend / .jbx-mk-* 等）的颜色
+     等张宇桐提供 CSS 主题变量后再补，本次不写地图颜色。
+   · 对比表 .jbx-ct-min 的 2 处 !important 颜色按要求跳过。
+   · 不改任何 class / id，不隐藏 #schemeList / #compareTable / #mapArea，
+     不处理 planPickBar、startNavBtn，也不改动 map-picker 的出发地结构。
+---------------------------------------------------------------------------- */
+
+/* 地图主题配色：与封面、首页的米白 / 沙米 / 暖橙 / 墨色语言保持一致 */
+:root {
+  --jbx-transit: #5B7E92;
+  --jbx-taxi: #E69F66;
+  --jbx-bike: #5F7F6A;
+  --jbx-start: #87A8BC;
+  --jbx-meet: #C97B3D;
+  --jbx-dest: #C0392B;
+}
+
+body.result-page {
+  /* 暖色令牌：主题变量优先，缺失时回落到同款色值 */
+  --rp-bg: var(--bg, #FCFAF7);
+  --rp-sand: var(--sand, #F4F1E9);
+  --rp-sand-soft: rgba(244, 241, 233, .6);
+  --rp-ink: var(--ink, #3A4249);
+  --rp-ink-soft: var(--ink-soft, rgba(58, 66, 73, .62));
+  --rp-ink-mute: rgba(58, 66, 73, .45);
+  --rp-surface: rgba(255, 255, 255, .94);
+
+  /* 暖橙点缀：与封面、首页的 --orange 同源，深化色沿用项目里已有的暖棕色 */
+  --rp-accent: var(--orange, #E69F66);
+  --rp-accent-deep: #C97B3D;
+  --rp-accent-soft: rgba(230, 159, 102, .14);
+  --rp-accent-line: rgba(230, 159, 102, .5);
+
+  --rp-line: rgba(135, 168, 188, .26);
+  --rp-line-soft: rgba(135, 168, 188, .16);
+  --rp-line-strong: rgba(135, 168, 188, .5);
+  --rp-shadow: 0 10px 26px rgba(135, 168, 188, .08);
+  --rp-shadow-hover: 0 18px 36px rgba(135, 168, 188, .14);
+  --rp-shadow-best: 0 14px 30px rgba(230, 159, 102, .16);
+  --rp-radius: 18px;
+
+  /* 与首页同一套主色：雾蓝负责结构与主操作，暖橙只做点缀 */
+  --rp-blue: var(--blue, #87A8BC);
+  --rp-blue-deep: var(--blue-deep, #5B7E92);
+
+  /* 数据提示条语义色：保留绿/黄/红含义，浓度与沙色底协调 */
+  --rp-ok: #5F7F6A;
+  --rp-warn: #C97B3D;
+  --rp-bad: #C0392B;
+  --rp-ok-text: #4E6B57;
+  --rp-warn-text: #8A5A2B;
+  --rp-bad-text: #A33A2C;
+
+  background: var(--rp-bg);
+  color: var(--rp-ink);
+  overflow-x: hidden;
+}
+
+/* ---------- 页面与页头 ---------- */
+body.result-page .page {
+  color: var(--rp-ink);
+}
+
+body.result-page .header {
+  border-bottom: 1px solid var(--rp-line-soft);
+}
+
+body.result-page .header .eyebrow {
+  color: var(--rp-ink-mute);
+}
+
+body.result-page .header h1,
+body.result-page .header p {
+  color: var(--rp-ink);
+}
+
+body.result-page .header p#subtitle {
+  color: var(--rp-ink-soft);
+}
+
+/* ---------- 方案卡片 ---------- */
+body.result-page .scheme-card {
+  border: 1px solid var(--rp-line);
+  border-top: 1px solid var(--rp-line);
+  border-radius: var(--rp-radius);
+  background: var(--rp-surface);
+  box-shadow: var(--rp-shadow);
+}
+
+body.result-page .scheme-card.best {
+  border-color: var(--rp-accent-line);
+  background: var(--rp-sand-soft);
+  box-shadow: var(--rp-shadow-best);
+}
+
+body.result-page .scheme-card:hover {
+  border-color: var(--rp-line-strong);
+  box-shadow: var(--rp-shadow-hover);
+}
+
+body.result-page .scheme-card.is-selected,
+body.result-page .scheme-card[aria-selected="true"] {
+  border-color: var(--rp-blue);
+  background: var(--rp-surface);
+  box-shadow: var(--rp-shadow-hover);
+}
+
+/* 综合得分徽标：与首页一致，沙米底 + 雾蓝深色字 */
+body.result-page .scheme-score {
+  background: var(--rp-sand);
+  color: var(--rp-blue-deep);
+}
+
+/* ---------- 结论与指标 ---------- */
+body.result-page .conclusion {
+  color: var(--rp-ink-soft);
+}
+
+body.result-page .metrics {
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+body.result-page .metric {
+  border: 1px solid var(--rp-line-soft);
+  border-radius: 12px;
+  background: var(--rp-sand);
+}
+
+body.result-page .metric b {
+  color: var(--rp-ink);
+}
+
+body.result-page .metric span {
+  color: var(--rp-ink-soft);
+}
+
+/* ---------- 成员行程 ---------- */
+body.result-page .leg {
+  border-radius: 10px;
+  background: var(--rp-sand-soft);
+  color: var(--rp-ink-soft);
+  overflow-wrap: break-word;
+}
+
+body.result-page .leg b {
+  color: var(--rp-ink);
+}
+
+/* ---------- 数据可信度提示条：沙色底，保留绿/黄/红语义 ---------- */
+body.result-page .data-hint {
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+body.result-page .data-hint--ok {
+  background: var(--rp-sand-soft);
+  border-color: rgba(95, 127, 106, .26);
+  color: var(--rp-ok-text);
+}
+
+body.result-page .data-hint--warn {
+  background: var(--rp-sand-soft);
+  border-color: rgba(201, 123, 61, .28);
+  color: var(--rp-warn-text);
+}
+
+body.result-page .data-hint--bad {
+  background: var(--rp-sand-soft);
+  border-color: rgba(192, 57, 43, .24);
+  color: var(--rp-bad-text);
+}
+
+body.result-page .data-hint--ok .data-hint__icon {
+  background: var(--rp-ok);
+}
+
+body.result-page .data-hint--warn .data-hint__icon {
+  background: var(--rp-warn);
+}
+
+body.result-page .data-hint--bad .data-hint__icon {
+  background: var(--rp-bad);
+}
+
+/* ---------- 对比表：暖色覆盖 ----------
+   表头、斑马行、最佳名次、标签统一到沙色 / 暖橙；
+   .jbx-ct-min 相关的 !important 颜色按要求跳过，不做强压。 */
+body.result-page .jbx-ct-wrap {
+  border-color: var(--rp-line);
+  box-shadow: var(--rp-shadow);
+}
+
+body.result-page .jbx-ct-wrap th {
+  background: var(--rp-blue);
+  color: #fff;
+}
+
+body.result-page .jbx-ct-wrap td {
+  border-top-color: var(--rp-line-soft);
+}
+
+body.result-page .jbx-ct-wrap tbody tr:nth-child(even) td {
+  background: var(--rp-sand-soft);
+}
+
+body.result-page .jbx-ct-rank.is-best {
+  background: var(--rp-blue-deep);
+  color: #fff;
+}
+
+body.result-page .jbx-ct-badge {
+  background: var(--rp-accent-soft);
+  color: var(--rp-accent-deep);
+}
+
+body.result-page .jbx-ct-empty {
+  border-color: var(--rp-line);
+  background: var(--rp-sand-soft);
+}
+
+/* ---------- 地图：容器 / 页签 / 图例文字暖色覆盖 ----------
+   路线、点位、图例色块的颜色必须与地图实际绘制一致，
+   仍由 js/map-view.js 控制，这里一律不碰。 */
+body.result-page #mapBox {
+  border-color: var(--rp-line);
+  box-shadow: 0 20px 44px rgba(135, 168, 188, .12);
+}
+
+body.result-page #mapBox #mapArea {
+  background: var(--rp-sand);
+}
+
+body.result-page .jbx-tab {
+  background: var(--rp-sand);
+  color: var(--rp-ink-soft);
+}
+
+body.result-page .jbx-tab.on {
+  background: var(--rp-blue);
+  color: #fff;
+}
+
+body.result-page #mapHint {
+  color: var(--rp-ink-mute);
+}
+
+body.result-page .jbx-legend {
+  border-color: var(--rp-line);
+  background: rgba(255, 255, 255, .94);
+  color: var(--rp-ink-soft);
+}
+
+body.result-page .jbx-map-note {
+  color: var(--rp-ink-soft);
+}
+
+body.result-page .jbx-map-note b {
+  color: var(--rp-ink);
+}
+
+body.result-page .jbx-map-note .k {
+  background: var(--rp-sand);
+  color: var(--rp-blue-deep);
+}
+
+/* ---------- 手机窄屏：375px 无横向滚动、不互相挤压 ---------- */
+@media (max-width: 640px) {
+  body.result-page .page {
+    padding: 18px 14px 44px;
+  }
+
+  body.result-page .header {
+    padding-bottom: 16px;
+    margin-bottom: 18px;
+  }
+
+  body.result-page .header h1 {
+    font-size: 21px;
+    letter-spacing: .16em;
+    text-indent: 0;
+  }
+
+  body.result-page .scheme-card {
+    padding: 18px 16px 16px;
+  }
+
+  body.result-page .scheme-card h2 {
+    padding-right: 72px;
+    font-size: 15px;
+  }
+
+  body.result-page .scheme-score {
+    top: 14px;
+    right: 14px;
+    padding: 3px 8px;
+    font-size: 10.5px;
+  }
+
+  body.result-page .metrics {
+    gap: 6px;
+  }
+
+  body.result-page .metric {
+    padding: 8px 4px;
+  }
+
+  body.result-page .metric b {
+    font-size: 14px;
+  }
+
+  body.result-page .leg {
+    padding: 8px 10px;
+    font-size: 11.5px;
+  }
+}
+
+/* ---------- 仅移动端：正文改用行楷，字重略加粗（桌面端字体保持原样） ---------- */
+@media (max-width: 768px) {
+  body.result-page,
+  body.result-page button,
+  body.result-page input,
+  body.result-page select,
+  body.result-page textarea {
+    font-family: "STXingkai", "KaiTi", 楷体, serif;
+    font-weight: 600;
+  }
+}
