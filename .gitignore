@@ -49,3 +49,6 @@ package-lock.json
 Thumbs.db
 desktop.ini
 ~$*
+
+# One-off scripts (city data generator / local simulation), never commit
+_*.js

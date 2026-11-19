@@ -707,20 +707,40 @@ button, input, select, textarea { font-family: inherit; }
   line-height: 1.5;
 }
 
-/* 全国城市搜索添加行：输入框 + 「添加」按钮横排 */
-.city-add-row {
-  display: flex;
-  gap: 8px;
-  align-items: stretch;
+/* 全国城市搜索选择器（美团式）：输入即搜的浮层列表 */
+.city-pick-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  background: #fff;
+  border: 1px solid rgba(58, 66, 73, .18);
+  border-radius: 12px;
+  box-shadow: 0 16px 34px -22px rgba(58, 66, 73, .55);
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 6px;
 }
-.city-add-row input {
-  flex: 1;
-  min-width: 0;
+.city-pick-item {
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--ink, #3A4249);
 }
-.city-add-row .btn-ghost {
-  flex: 0 0 auto;
-  padding: 0 18px;
-  white-space: nowrap;
+.city-pick-item:hover,
+.city-pick-item:active { background: rgba(58, 66, 73, .07); }
+.city-pick-item small {
+  color: var(--ink-faint, #9fb0bd);
+  margin-left: 8px;
+  font-size: 11px;
+}
+.city-pick-empty {
+  padding: 14px;
+  font-size: 12px;
+  color: var(--ink-faint, #9fb0bd);
+  text-align: center;
 }
 
 /* ---------- 邀请码块 ---------- */

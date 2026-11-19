@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>结伴行 · 短途结伴出游</title>
-  <link rel="stylesheet" href="css/style1.css?v=1119a">
+  <link rel="stylesheet" href="css/style1.css?v=1119b">
 </head>
 <body class="home">
 
@@ -347,16 +347,12 @@
 
         <form id="createForm" novalidate>
           <div class="field">
-            <label>出行城市（决定地名解析范围与公交换乘）</label>
-            <select id="citySelect" name="city"></select>
-          </div>
-          <div class="field">
-            <label>没有想去的城市？搜索添加全国任意城市</label>
-            <div class="city-add-row">
-              <input id="cityAddInput" type="text" placeholder="输入城市名，如：长沙、桂林、拉萨、昆山" autocomplete="off">
-              <button type="button" id="cityAddBtn" class="btn btn-ghost">添加</button>
+            <label>出行城市（全国 748 城可选，输入即搜）</label>
+            <input id="cityPickInput" type="text" placeholder="输入城市名，如：武汉、桂林、拉萨、昆山" autocomplete="off">
+            <div class="city-pick-panel" id="cityPickPanel" hidden>
+              <div id="cityPickList"></div>
             </div>
-            <div class="field-hint" id="cityAddHint">城市不在上面列表里就在这里输名字，查询约需 2 秒，成功后自动选为出行城市</div>
+            <div class="field-hint">像美团选城市一样直接打字搜，地级市和县级市（昆山、义乌）都可以</div>
           </div>
           <div class="field">
             <label>目的地</label>
@@ -642,6 +638,7 @@
   <script src="js/formats.js?v=1115b"></script>
   <script src="js/amap-api.js?v=1115b"></script>
   <script src="js/cities.js?v=1115b"></script>
+  <script src="js/cities-all.js?v=1119b"></script>
   <script src="js/city-online.js?v=1115b"></script>
   <script src="js/engine.js?v=1115b"></script>
   <script src="js/cloud-config.js?v=1117a"></script>
@@ -899,7 +896,7 @@
       const dest = $('#destInput').value.trim();
       const dateRaw = $('#dateInput').value.trim();
       const remark = $('#remarkInput').value.trim();
-      const cityKey = $('#citySelect').value;
+      const cityKey = createCityKey;
 
       // 校验
       let ok = true;
@@ -1623,18 +1620,112 @@
       state.selectedPlan = o.dataset.plan;
     }));
 
-    // 重画城市下拉（预置城市 + 本机联网添加过的自定义城市，添加新城市后要刷新）
-    function refreshCitySelect(selKey) {
-      const citySel = $('#citySelect');
-      if (!citySel || typeof getCityList !== 'function') return;
-      citySel.innerHTML = '';
-      getCityList().forEach(c => {
-        const o = document.createElement('option');
-        o.value = c.key;
-        o.textContent = c.custom ? c.name + '（自定义）' : c.name;
-        citySel.appendChild(o);
+    // ---- 全国城市搜索选择器（美团式：输入即搜即选，数据来自 cities-all.js） ----
+    // 选中的城市 key；applyCity 在选中时就已切好，建房提交直接用
+    var createCityKey = '';
+
+    function closeCityPanel() {
+      const p = $('#cityPickPanel');
+      if (p) p.hidden = true;
+    }
+
+    function renderCityList(items, emptyTip) {
+      const box = $('#cityPickList');
+      box.innerHTML = '';
+      if (!items.length) {
+        const d = document.createElement('div');
+        d.className = 'city-pick-empty';
+        d.textContent = emptyTip || '没找到这个城市';
+        box.appendChild(d);
+        return;
+      }
+      items.forEach(it => {
+        const d = document.createElement('div');
+        d.className = 'city-pick-item';
+        // 已在本机选过的城市标出来，帮用户确认不用重新查
+        const known = (typeof getCityList === 'function') && getCityList().some(c => c.name === it.n || c.adcode === it.a);
+        d.innerHTML = '<span>' + it.n + '</span>' + (known ? '<small>已选过</small>' : '');
+        d.addEventListener('click', () => pickCreateCity(it));
+        box.appendChild(d);
       });
-      citySel.value = selKey || currentCityKey();
+    }
+
+    function filterCities(q) {
+      if (!window.CITIES_ALL || !CITIES_ALL.length) return [];
+      q = q.trim();
+      if (!q) {
+        // 空输入：默认展示 6 个预置城市 + 本机选过的，优先级最高
+        const preset = getCityList().map(c => ({ n: c.name, a: c.adcode, c: c.center }));
+        return preset.slice(0, 12);
+      }
+      return CITIES_ALL.filter(x => x.n.indexOf(q) >= 0).slice(0, 20);
+    }
+
+    function pickCreateCity(item) {
+      // 优先复用本机已有城市对象：预置 6 城信息最全（含候选集合点和示例）。
+      // 注意按名字或"非自定义且 adcode 精确相等"匹配——县级市（昆山）和所属
+      // 地级市（苏州）的公交码都是 320500，不能拿公交码互配，否则选昆山会串成苏州。
+      let city = getCityList().find(c => c.name === item.n)
+        || getCityList().find(c => c.adcode === item.a && !c.custom)
+        || null;
+      if (!city) {
+        const p2 = String(item.a).slice(0, 2);
+        const isMuni = (p2 === '11' || p2 === '12' || p2 === '31' || p2 === '50');
+        const transit = (typeof _toCityAdcode === 'function') ? _toCityAdcode(item.a, 'district') : item.a;
+        city = {
+          key: 'c' + item.a,                // 用原码做 key：昆山/苏州各自独立，不打架
+          name: item.n,
+          adcode: transit,                  // 公交换乘用市级 adcode（和 city-online.js 同口径）
+          poiAdcode: isMuni ? transit : String(item.a),  // POI 用原码，县级市才搜得到本地的站
+          center: item.c,
+          stations: [],                     // 候选集合点后台马上补，不阻塞选城市/建房
+          destExample: '',
+          members: [],
+          custom: true
+        };
+        addCustomCity(city);
+        if (typeof collectStations === 'function') {
+          collectStations(city).then(st => {
+            city.stations = st;
+            saveCustomCities();             // 查到就存下来，断网重开也能用
+          }).catch(() => { /* 查不到不影响：成员出发地靠联想输入，不依赖集合点 */ });
+        }
+      }
+      applyCity(city.key);
+      createCityKey = city.key;
+      $('#cityPickInput').value = city.name;
+      closeCityPanel();
+    }
+
+    function initCityPicker() {
+      const input = $('#cityPickInput');
+      const panel = $('#cityPickPanel');
+      if (!input || !panel) return;
+
+      input.addEventListener('focus', () => {
+        renderCityList(filterCities(input.value));
+        panel.hidden = false;
+      });
+      input.addEventListener('input', () => {
+        renderCityList(filterCities(input.value));
+        panel.hidden = false;
+      });
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();               // 别让回车触发整个建房表单
+          const top = filterCities(input.value);
+          if (top.length) pickCreateCity(top[0]);  // 回车 = 选第一个匹配项
+        } else if (e.key === 'Escape') {
+          closeCityPanel();
+        }
+      });
+      document.addEventListener('click', e => {
+        if (!panel.hidden && !panel.contains(e.target) && e.target !== input) closeCityPanel();
+      });
+
+      // 恢复上次城市：本机预置/自定义列表里有就带出来（applyCity 启动时已切好）
+      createCityKey = currentCityKey();
+      input.value = currentCity().name;
     }
 
     // ---- 初始化 ----
@@ -1648,35 +1739,8 @@
       const el = $('#dateInput');
       if (el) el.value = iso;
 
-      // 城市下拉：预置城市 + 本机之前联网添加过的自定义城市
-      refreshCitySelect();
-
-      // 全国城市搜索添加：city-online.js 查行政信息 + 地铁/火车站/景点，
-      // 组装成标准城市对象后 addCustomCity 塞进下拉（和成员端 restoreCityForJoin 同一套解析链路）
-      const cityAddInput = $('#cityAddInput');
-      if (cityAddInput && typeof prepareOnlineCity === 'function') {
-        const addCityOnline = () => {
-          const kw = cityAddInput.value.trim();
-          if (!kw) { toast('请输入城市名，如：长沙、桂林'); return; }
-          const btn = $('#cityAddBtn');
-          btn.disabled = true;
-          $('#cityAddHint').textContent = '正在查询「' + kw + '」…约需 2 秒（查地铁/火车站做集合点）';
-          prepareOnlineCity(kw).then(city => {
-            addCustomCity(city);
-            refreshCitySelect(city.key);
-            cityAddInput.value = '';
-            $('#cityAddHint').textContent = '已添加「' + city.name + '」，已选为出行城市';
-            toast('已添加城市：' + city.name);
-          }).catch(err => {
-            // 失败原因要如实显示：限频/网络/省名/查不到站，各有各的提示（city-online.js 里写好了）
-            $('#cityAddHint').textContent = err.message || '查询失败，请重试';
-          }).then(() => { btn.disabled = false; });
-        };
-        $('#cityAddBtn').addEventListener('click', addCityOnline);
-        cityAddInput.addEventListener('keydown', e => {
-          if (e.key === 'Enter') { e.preventDefault(); addCityOnline(); }  // 别让回车触发整个建房表单
-        });
-      }
+      // 全国城市搜索选择器（cities-all.js 提供 748 城数据）
+      initCityPicker();
 
       // 有上次的房间就提一句，方便回到房间继续（不自动跳转，避免打断演示）
       const last = readPersistedRoom();
@@ -1690,7 +1754,7 @@
 
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡、不挡点击，答辩前留着也无妨。 -->
-  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1119a</div>
+  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1119b</div>
 
 </body>
 </html>
