@@ -555,9 +555,8 @@ var WEIGHT_PRESETS = {
 var WEIGHTS_STORE_KEY = "jbx_weights";
 var _WEIGHT_KEYS = ["totalTime", "totalCost", "worstTime", "maxWait"];
 
-/* 权重清洗：负数/非数字归零，再归一化到和为 1
-   对外展示的 score 是 1-100 分制（100 最优，最差保底 60），分数越高越优；
-   拆解用的 scoreDetail 仍保留 0~1 的原始分项，答辩讲"为什么赢/输在哪一项"读它 */
+/* 权重清洗：负数/非数字归零，再归一化到和为 1。
+   调用方可以传 40/20/30/10 这种"比例"（发起人填的），也可以传 0.4/0.2/0.3/0.1，都能吃。 */
 function _sanitizeWeights(w) {
   var out = {}, sum = 0;
   _WEIGHT_KEYS.forEach(function (k) {
@@ -612,7 +611,57 @@ function resetWeights() {
   return getWeights();
 }
 
-/* ================= 八、总入口：生成三方案 + 归一化加权打分 ================= */
+/* ================= 七点五、打分：相对最优的"额外代价" ================= */
+/* 口径（2026-11-19 按组长要求改）：
+ *   原来是把三个方案的成本线性拉开映射到 60~100，第一名恒为 100 分——
+ *   但"最优"只是三者里相对最好，不代表方案本身满分，100 分站不住脚。
+ *   现在改成**绝对口径的额外代价**：
+ *     ① 四个指标各自取三方案里的最优值当基准；
+ *     ② 每个方案逐项算"比基准多付出多少"（相对比例，0 = 该项最优）；
+ *     ③ 用发起人给的权重加权 → score = 额外代价，0 起，越低越好，1 分 = 综合多付出 1%。
+ *   好处：三套方案差不多好时，分数都贴近 0（"怎么走都行"）；
+ *         差距大时才会拉开，而且数字能直接读成百分比，不再有"硬凑的 100 分"。
+ *   换权重不需要重新查路线：metrics 已经算好了，这里只做纯数学重排。 */
+var _METRIC_KEYS = ["totalTime", "totalCost", "worstTime", "maxWait"];
+var _METRIC_FIELDS = { totalTime: "totalTimeMin", totalCost: "totalCost", worstTime: "worstTimeMin", maxWait: "maxWaitMin" };
+
+function scoreSchemes(schemes, weights) {
+  var w = _sanitizeWeights(weights || getWeights());
+  var list = (schemes || []).slice();
+  var base = {};
+
+  if (list.length) {
+    _METRIC_KEYS.forEach(function (k) {
+      var f = _METRIC_FIELDS[k];
+      var vals = list.map(function (s) { return (s.metrics && +s.metrics[f]) || 0; });
+      base[k] = Math.min.apply(null, vals);
+    });
+
+    list.forEach(function (s) {
+      var d = {}, cost = 0;
+      _METRIC_KEYS.forEach(function (k) {
+        var f = _METRIC_FIELDS[k];
+        var v = (s.metrics && +s.metrics[f]) || 0;
+        var maxV = Math.max.apply(null, list.map(function (x) { return (x.metrics && +x.metrics[f]) || 0; }));
+        /* 基准为 0（例如直达的最长等待）时不能除 0，改用"与最大值的差距"缩放 */
+        var rel = base[k] > 0 ? (v - base[k]) / base[k]
+                              : (maxV > 0 ? (v - base[k]) / maxV : 0);
+        if (!isFinite(rel) || rel < 0) rel = 0;
+        d[k] = Math.round(rel * 100) / 100;      // 保留两位，页面直接显示百分比
+        cost += w[k] * rel;
+      });
+      s.scoreDetail = d;
+      s.rawScore = Math.round(cost * 10000) / 10000;      // 0~1+，内部成本
+      s.score = Math.round(cost * 1000) / 10;             // 对外：额外代价，1 位小数
+    });
+
+    list.sort(function (a, b) { return a.score - b.score; });   // 代价越低越优
+  }
+
+  return { schemes: list, weights: w, weightsName: _weightsName(w), baseline: base };
+}
+
+/* ================= 八、总入口：生成三方案 + 加权打分 ================= */
 /* opts 全部可选，不传就是老行为：
  *   weights  {totalTime,totalCost,worstTime,maxWait}  本次使用的权重
  *   onStage  function(stageText)  进度回调（一次生成 7~10 秒，UI 可以拿它做进度提示）
@@ -643,56 +692,27 @@ function generateSchemes(members, dest, opts) {
       });
     });
   }).then(function (schemes) {
-    stage("归一化打分并排序…");
+    stage("按权重打分并排序…");
 
-    /* 归一化：每项指标除以三方案中的最大值（越小越好 → 得分越小越好） */
-    function norm(key) {
-      var max = Math.max.apply(null, schemes.map(function (s) { return s.metrics[key] || 0.0001; }));
-      if (!(max > 0)) max = 0.0001;
-      return schemes.map(function (s) { return (s.metrics[key] || 0) / max; });
-    }
-    var nTime = norm("totalTimeMin"), nCost = norm("totalCost"),
-        nWorst = norm("worstTimeMin"), nWait = norm("maxWaitMin");
-
-    schemes.forEach(function (s, i) {
-      /* scoreDetail：四个分项的加权贡献拆开（0~1，越小越好），
-         答辩讲"这个方案为什么赢/输在哪一项"直接读它 */
-      var d = {
-        totalTime: Math.round(weights.totalTime * nTime[i] * 100) / 100,
-        totalCost: Math.round(weights.totalCost * nCost[i] * 100) / 100,
-        worstTime: Math.round(weights.worstTime * nWorst[i] * 100) / 100,
-        maxWait: Math.round(weights.maxWait * nWait[i] * 100) / 100
-      };
-      s.scoreDetail = d;
-      s.rawScore = _round1(d.totalTime + d.totalCost + d.worstTime + d.maxWait); // 内部成本分
-    });
-
-    /* 1-100 分制映射：最优方案 100 分，最差保底 60 分，中间按成本分差距线性。
-     * 口径好解释："三套里最优的得满分，其余按相对差距落在 60~100 之间，
-     * 都是能用的方案，只是相对优劣"。三套打平时全给 100。 */
-    var raws = schemes.map(function (s) { return s.rawScore; });
-    var rMin = Math.min.apply(null, raws), rMax = Math.max.apply(null, raws);
-    schemes.forEach(function (s) {
-      s.score = (rMax - rMin < 1e-9)
-        ? 100
-        : Math.round(60 + 40 * (rMax - s.rawScore) / (rMax - rMin));
-    });
-    schemes.sort(function (a, b) { return b.score - a.score; });   // 分越高越优，最优排第一
+    /* 打分交给 scoreSchemes：换权重只需重跑这一步，不用重新查路线 */
+    var scored = scoreSchemes(schemes, weights);
+    var list = scored.schemes;
 
     /* 一句话结论：文案在 js/result-text.js（闫雅欣维护），此处只做选择 */
     var TXT = (typeof RESULT_TEXT === "undefined")
       ? { best: "综合最优，推荐优先考虑", close: "耗时接近最优，可作备选", far: "耗时或花费偏高，仅在特殊需求时选" }
       : RESULT_TEXT;
-    schemes[0].conclusion = TXT.best;
-    for (var i = 1; i < schemes.length; i++) {
-      schemes[i].conclusion = schemes[i].metrics.totalTimeMin <= schemes[0].metrics.totalTimeMin * 1.1
+    list[0].conclusion = TXT.best;
+    for (var i = 1; i < list.length; i++) {
+      list[i].conclusion = list[i].metrics.totalTimeMin <= list[0].metrics.totalTimeMin * 1.1
         ? TXT.close : TXT.far;
     }
 
     return {
-      schemes: schemes,
-      weights: weights,                      // 新增：本次实际使用的权重（已归一化到和为 1）
-      weightsName: _weightsName(weights)     // 新增：命中的预设名，否则"自定义"
+      schemes: list,
+      weights: scored.weights,               // 本次实际使用的权重（已归一化到和为 1）
+      weightsName: scored.weightsName,       // 命中的预设名，否则"自定义"
+      baseline: scored.baseline              // 每项指标在三方案里的最优值（页面可写"比最优多 X 分钟"）
     };
   });
 }

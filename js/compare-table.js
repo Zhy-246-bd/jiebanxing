@@ -11,7 +11,9 @@
  *
  * 数据来源：localStorage["jbx_result"] → data.result.schemes
  * 字段：name / metrics.{totalTimeMin,totalCost,worstTimeMin,maxWaitMin} / score / conclusion / legs[].isBottleneck
- * 注意：四项指标和 score 全部是「越小越好」，高亮统一取每列最小值。
+ * 注意：五项数值全部是「越小越好」（高亮统一取最小）。
+ *       score 是 11-19 改口径后的「额外代价」：0 = 三方案里该项综合最省事，越低越优。
+ *       旧的 60~100 分制（第一名恒为 100）已废弃，不要再按高分最优去判断。
  * ============================================================ */
 (function () {
   "use strict";
@@ -66,12 +68,12 @@
   }
 
   /* ---------- 4. 每列最小值（用于高亮） ---------- */
-  /* 综合得分专用：1-100 整数，不补 .0（100 显示成 100 而不是 100.0） */
+  /* 额外代价专用：保留一位小数（0 → 0.0），超过 100 也照实显示 */
   function fmtScore(v) {
     if (v === null || v === undefined || v === "") return "—";
     var n = Number(v);
     if (!isFinite(n)) return "—";
-    return String(Math.round(n));
+    return (Math.round(n * 10) / 10).toFixed(1);
   }
 
   function minOf(schemes, pick) {
@@ -96,7 +98,16 @@
   function isMax(v, m) {
     var n = Number(v);
     if (!isFinite(n) || !isFinite(m)) return false;
-    return n >= m - 0.5;   // 100 分制四舍五入到整数，容差 0.5 足够
+    return n >= m - 0.5;   // 保留给需要「越大越好」的列，目前没有列在用
+  }
+
+  /* 【2026-11-19 补】四项指标与额外代价都是「越小越好」。
+   * 原文件只写了 isMax 却在渲染时调用 isMin，一渲染就 ReferenceError，
+   * 整个对比表挂不出来——这里补上，容差 0.05 让并列最优都能高亮。 */
+  function isMin(v, m) {
+    var n = Number(v);
+    if (!isFinite(n) || !isFinite(m)) return false;
+    return n <= m + 0.05;
   }
 
   /* ---------- 5. 样式：自带，不碰 style.css ---------- */
@@ -157,17 +168,17 @@
     var mCost  = minOf(schemes, function (s) { return s.metrics && s.metrics.totalCost; });
     var mWorst = minOf(schemes, function (s) { return s.metrics && s.metrics.worstTimeMin; });
     var mWait  = minOf(schemes, function (s) { return s.metrics && s.metrics.maxWaitMin; });
-    var mScore = maxOf(schemes, function (s) { return s.score; });   // score 是 1-100，分高最优
+    var mScore = minOf(schemes, function (s) { return s.score; });   // 额外代价越低越优
 
     var html = [];
     html.push('<div class="jbx-ct-block">');
     html.push('<h3 class="jbx-ct-title">三方案指标对比');
-    html.push('<small>绿底 = 该列最优；四项指标越小越好，综合得分越高越好（满分 100）</small></h3>');
+    html.push('<small>绿底 = 该列最优；五项都是越小越好，额外代价 0 = 三个方案里综合最省事</small></h3>');
     html.push('<div class="jbx-ct-wrap">');
     html.push('<table class="' + TABLE_CLASS + '">');
     html.push("<thead><tr>");
     html.push("<th>方案</th><th>总耗时</th><th>总费用</th><th>最长单人</th>");
-    html.push("<th>最长等待</th><th>综合得分</th><th>瓶颈成员</th><th>结论</th>");
+    html.push("<th>最长等待</th><th>额外代价</th><th>瓶颈成员</th><th>结论</th>");
     html.push("</tr></thead><tbody>");
 
     for (var i = 0; i < schemes.length; i++) {
@@ -190,7 +201,7 @@
         fmt(mt.worstTimeMin, '<span class="jbx-ct-unit">分</span>') + "</td>");
       html.push('<td class="' + (isMin(mt.maxWaitMin, mWait) ? "jbx-ct-min" : "") + '">' +
         fmt(mt.maxWaitMin, '<span class="jbx-ct-unit">分</span>') + "</td>");
-      html.push('<td class="' + (isMax(s.score, mScore) ? "jbx-ct-min" : "") + '">' +
+      html.push('<td class="' + (isMin(s.score, mScore) ? "jbx-ct-min" : "") + '">' +
         fmtScore(s.score) + "</td>");
 
       html.push("<td>" + bottleneckNames(s) + "</td>");
@@ -201,7 +212,8 @@
 
     html.push("</tbody></table></div>");
     html.push('<p class="jbx-ct-note">指标含义：总耗时 / 总费用 = 全员合计；最长单人 = 用时最久的那个人（即瓶颈）；' +
-      '最长等待 = 等人对齐出发所花的额外时间；综合得分 = 四指标归一化加权，越小越优。</p>');
+      '最长等待 = 等人对齐出发所花的额外时间；额外代价 = 四项各比“三方案里最好那个”多付出的比例，按发起人设的权重加权，'
+      + '0 表示综合最省事，越低越优（不是百分制得分）。</p>');
     html.push("</div>");
     return html.join("");
   }

@@ -53,8 +53,12 @@
 
   <!-- ① 本地 Key（不进仓库）：文件不存在时静默跳过，页面照常跑，只是数据走本地估算。
        新拉代码的人：复制 js/config.example.js 为 js/config.local.js，填入高德 Web 服务 Key。 -->
+  <!-- 配置：config.js 进仓库（线上靠它拿 Key）；config.local.js 不进仓库（本地覆盖）。
+       新拉代码的人：复制 js/config.example.js 为 js/config.local.js，填入高德 Web 服务 Key。 -->
+  <script src="js/config.js"
+          onerror="console.info('%c[结伴行] 未找到 js/config.js，当前用本地估算数据。','color:#e67e22')"></script>
   <script src="js/config.local.js"
-          onerror="console.info('%c[结伴行] 未找到 js/config.local.js，当前用本地估算数据。要接真实高德数据：复制 js/config.example.js 为 config.local.js 并填入 Key。','color:#e67e22')"></script>
+          onerror="console.info('%c[结伴行] 未找到 js/config.local.js，使用仓库配置（js/config.js）。','color:#8a97a0')"></script>
 
   <script src="js/formats.js"></script>
   <script src="js/result-text.js"></script>

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>结伴行 · 短途结伴出游</title>
-  <link rel="stylesheet" href="css/style1.css?v=1119h">
+  <link rel="stylesheet" href="css/style1.css?v=1119i">
 </head>
 <body class="home">
 
@@ -557,6 +557,24 @@
       <article class="card">
         <div class="card-head">
           <h3>汇合方案</h3>
+          <span class="hint owner-only" id="weightSummary" hidden>均衡偏好</span>
+        </div>
+        <!-- 发起人专用：方案偏好（决定三个方案怎么排序）。
+             不填就按默认均衡 40/20/30/10；填了按填的比例算，不必凑满 100。 -->
+        <div class="weight-panel owner-only" id="weightPanel" hidden>
+          <div class="weight-presets" id="weightPresets">
+            <button type="button" class="pref-chip weight-chip active" data-preset="balanced">均衡</button>
+            <button type="button" class="pref-chip weight-chip" data-preset="fast">时间优先</button>
+            <button type="button" class="pref-chip weight-chip" data-preset="cheap">省钱优先</button>
+            <button type="button" class="pref-chip weight-chip" data-preset="comfort">少等待</button>
+          </div>
+          <div class="weight-inputs">
+            <label>耗时<input id="wTime" type="number" min="0" max="100" step="5" inputmode="numeric" placeholder="40"></label>
+            <label>费用<input id="wCost" type="number" min="0" max="100" step="5" inputmode="numeric" placeholder="20"></label>
+            <label>单人最长<input id="wWorst" type="number" min="0" max="100" step="5" inputmode="numeric" placeholder="30"></label>
+            <label>等待<input id="wWait" type="number" min="0" max="100" step="5" inputmode="numeric" placeholder="10"></label>
+          </div>
+          <p class="weight-tip">比例填多少都行，会自动换算；全部留空＝默认 40 / 20 / 30 / 10。</p>
         </div>
         <div class="confluence-wrap" id="confluenceWrap">
           <div class="confluence-masked" id="confluenceMask" hidden>
@@ -663,15 +681,18 @@
          · cloud-config.js/cloud-api.js —— 房间、成员、方案快照读写
        文件缺失时页面照常打开，只是相关按钮会给出提示，不会白屏。
        ============================================================ -->
-  <script src="js/config.local.js?v=1116b"
-          onerror="console.info('%c[结伴行] 未找到 js/config.local.js，本次将使用本地估算数据。','color:#e67e22')"></script>
+  <!-- 配置：config.js 进仓库（线上 GitHub Pages 靠它拿 Key）；config.local.js 不进仓库（本地覆盖） -->
+  <script src="js/config.js?v=1119j"
+          onerror="console.info('%c[结伴行] 未找到 js/config.js，本次将使用本地估算数据。','color:#e67e22')"></script>
+  <script src="js/config.local.js?v=1119j"
+          onerror="console.info('%c[结伴行] 未找到 js/config.local.js，使用仓库配置（js/config.js）。','color:#8a97a0')"></script>
   <script src="js/formats.js?v=1115b"></script>
   <script src="js/amap-api.js?v=1119h"></script>
   <script src="js/cities.js?v=1115b"></script>
   <script src="js/cities-all.js?v=1119b"></script>
   <script src="js/city-online.js?v=1115b"></script>
   <script src="js/result-text.js?v=1117"></script>
-  <script src="js/engine.js?v=1115b"></script>
+  <script src="js/engine.js?v=1119i"></script>
   <script src="js/cloud-config.js?v=1117a"></script>
   <script src="js/cloud-api.js?v=1117a"></script>
   <!-- 出发地地图选点：JS API 在点按钮时才懒加载，首页不额外下载地图 SDK -->
@@ -702,6 +723,7 @@
       planReady: false,     // 云端是否已有方案
       expireAt: '',         // 房间过期时间（云端 expire_at）
       syncFailures: 0,      // 连续同步失败次数（用于离线提示）
+      weightLoadedFor: '',  // 权重已按哪个房间载入过（避免轮询反复覆盖输入框）
       polling: null         // 成员列表轮询定时器
     };
 
@@ -1444,8 +1466,120 @@
       $$('.member-only').forEach(el => { el.hidden = state.isOwner; });
     }
 
+    // ==========================================================
+    // 方案偏好：发起人可填的权重（2026-11-19）
+    // · 全部留空 = 用默认均衡 40/20/30/10，不填也照样能生成
+    // · 填了任意比例就按比例算，不要求加起来等于 100，引擎会自己归一化
+    // · 存本机、按房间区分（同一房间下次进来还是上次填的）
+    // · 换权重只是重新打分，不用重新查路线，所以生成前后都能调
+    // ==========================================================
+    const W_FIELDS = { totalTime: '#wTime', totalCost: '#wCost', worstTime: '#wWorst', maxWait: '#wWait' };
+    const W_KEYS = ['totalTime', 'totalCost', 'worstTime', 'maxWait'];
+    const W_PRESET = (typeof WEIGHT_PRESETS !== 'undefined') ? WEIGHT_PRESETS : {
+      balanced: { totalTime: 0.4, totalCost: 0.2, worstTime: 0.3, maxWait: 0.1 },
+      fast: { totalTime: 0.6, totalCost: 0.05, worstTime: 0.3, maxWait: 0.05 },
+      cheap: { totalTime: 0.2, totalCost: 0.6, worstTime: 0.1, maxWait: 0.1 },
+      comfort: { totalTime: 0.25, totalCost: 0.1, worstTime: 0.25, maxWait: 0.4 }
+    };
+
+    function wStoreKey() { return 'jbx_weights_' + (state.inviteCode || 'local'); }
+
+    function fillWeightInputs(w) {
+      W_KEYS.forEach(k => {
+        const el = $(W_FIELDS[k]);
+        if (el) el.value = (w && w[k] !== '' && w[k] != null) ? w[k] : '';
+      });
+    }
+
+    // 输入框 → 权重。全空（或全 0）返回 null，表示"用默认"
+    function currentWeights() {
+      const raw = W_KEYS.map(k => { const el = $(W_FIELDS[k]); return el ? String(el.value).trim() : ''; });
+      if (raw.every(v => v === '')) return null;
+      const out = {};
+      let sum = 0;
+      W_KEYS.forEach((k, i) => {
+        const n = Number(raw[i]);
+        out[k] = (raw[i] === '' || !isFinite(n) || n < 0) ? 0 : Math.min(100, n);
+        sum += out[k];
+      });
+      return sum > 0 ? out : null;
+    }
+
+    function weightPercent() {
+      const w = currentWeights() || W_PRESET.balanced;
+      const sum = W_KEYS.reduce((a, k) => a + (w[k] || 0), 0) || 1;
+      return W_KEYS.map(k => Math.round((w[k] || 0) / sum * 100));
+    }
+
+    // 界面同步：顶部小字摘要 + 预设按钮高亮（只有和预设完全一致才高亮）
+    function syncWeightUI() {
+      const pct = weightPercent();
+      const w = {};
+      W_KEYS.forEach((k, i) => { w[k] = pct[i] / 100; });
+      const name = (typeof _weightsName === 'function') ? _weightsName(w) : '均衡';
+      const sumEl = $('#weightSummary');
+      if (sumEl) sumEl.textContent = name + ' ' + pct.join(' / ');
+      $$('#weightPresets .weight-chip').forEach(btn => {
+        const p = W_PRESET[btn.dataset.preset];
+        const same = p && W_KEYS.every(k => Math.round((p[k] || 0) * 100) === pct[W_KEYS.indexOf(k)]);
+        btn.classList.toggle('active', !!same);
+      });
+    }
+
+    function persistWeights() {
+      try {
+        const raw = {};
+        W_KEYS.forEach(k => { const el = $(W_FIELDS[k]); raw[k] = el ? String(el.value).trim() : ''; });
+        localStorage.setItem(wStoreKey(), JSON.stringify(raw));
+      } catch (e) { /* 无痕模式忽略 */ }
+    }
+
+    function loadWeights() {
+      let raw = null;
+      try { raw = JSON.parse(localStorage.getItem(wStoreKey())); } catch (e) { raw = null; }
+      fillWeightInputs(raw);
+      syncWeightUI();
+    }
+
+    if ($('#weightPresets')) {
+      $$('#weightPresets .weight-chip').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const p = W_PRESET[btn.dataset.preset] || W_PRESET.balanced;
+          const nums = {};
+          W_KEYS.forEach(k => { nums[k] = Math.round((p[k] || 0) * 100); });
+          fillWeightInputs(nums);
+          persistWeights();
+          syncWeightUI();
+        });
+      });
+      Object.keys(W_FIELDS).forEach(k => {
+        const el = $(W_FIELDS[k]);
+        if (!el) return;
+        el.addEventListener('input', () => { persistWeights(); syncWeightUI(); });
+        el.addEventListener('change', () => { persistWeights(); syncWeightUI(); });
+      });
+    }
+
     function renderRoom() {
       applyRole();
+
+      // 权重按房间读一次：轮询会反复重渲染，不能每次都覆写发起人正在填的数字
+      if (state.weightLoadedFor !== state.inviteCode) {
+        state.weightLoadedFor = state.inviteCode;
+        loadWeights();
+      }
+      // 方案一生成，偏好就锁定：云端 savePlan 是"已有方案直接读取"，
+      // 改了权重也不会重新算，留着输入框只会让人误以为生效了
+      ['wTime', 'wCost', 'wWorst', 'wWait'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = !!state.planReady;
+      });
+      const wTip = document.querySelector('.weight-tip');
+      if (wTip) {
+        wTip.textContent = state.planReady
+          ? '方案已按当前偏好生成，偏好已锁定；想换偏好请新建一个房间。'
+          : '比例填多少都行，会自动换算；全部留空＝默认 40 / 20 / 30 / 10。';
+      }
 
       // 房间标题区：邀请码 + 目的地
       $('#roomMeta').textContent = '邀请码 ' + (state.inviteCode || '——') + ' · ' + (state.dest || '——');
@@ -1765,6 +1899,8 @@
 
     function runGenerate(membersForEngine, btn, oldText) {
       generateSchemes(membersForEngine, state.dest, {
+        // 发起人填的偏好；没填就不传，引擎用默认均衡权重
+        weights: currentWeights() || undefined,
         onStage: s => { btn.textContent = s; }
       }).then(result => {
         const payload = {
@@ -2006,7 +2142,7 @@
 
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡、不挡点击，答辩前留着也无妨。 -->
-  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1119h</div>
+  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1119j</div>
 
 </body>
 </html>

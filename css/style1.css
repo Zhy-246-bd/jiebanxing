@@ -1320,3 +1320,57 @@ button, input, select, textarea { font-family: inherit; }
   color: var(--ink-faint, #9fb0bd);
   word-break: break-all;
 }
+
+/* ---------- 方案偏好：发起人可填的权重（2026-11-19） ---------- */
+/* 放在「汇合方案」卡片顶部，只有发起人可见（.owner-only 控制） */
+.weight-panel {
+  padding: 0 0 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px dashed rgba(135, 168, 188, .3);
+}
+.weight-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.weight-chip {
+  padding: 7px 14px;
+  font-size: 12.5px;
+}
+.weight-inputs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.weight-inputs label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  letter-spacing: .04em;
+}
+.weight-inputs input {
+  width: 100%;
+  height: 42px;
+  padding: 0 10px;
+  font-size: 14px;
+  color: var(--ink);
+  border: 1px solid rgba(135, 168, 188, .35);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .9);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.weight-inputs input:focus { outline: none; border-color: var(--blue); }
+.weight-inputs input::placeholder { color: rgba(58, 66, 73, .28); }
+.weight-tip {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+@media (max-width: 420px) {
+  .weight-inputs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

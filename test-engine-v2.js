@@ -202,17 +202,16 @@ function case4() {
 
     var s = rCost.schemes[0];
     ok(s.scoreDetail && typeof s.scoreDetail.totalCost === "number", "scoreDetail 拆出了四个分项");
-    ok(s.score === 100, "1-100 分制：费用最小的方案得满分 100（实际 " + s.score + "）");
-    ok(rCost.schemes.every(function (x) { return x.score >= 60 && x.score <= 100; }),
-      "所有方案得分都落在 60~100 区间");
+    ok(s.score === 0, "改成额外代价口径：该项最优的方案代价为 0（实际 " + s.score + "）");
+    ok(rCost.schemes.length > 1 && rCost.schemes[0].score <= rCost.schemes[rCost.schemes.length - 1].score,
+      "代价越低越优，第一名不高于最后一名");
 
-    /* 排序方向：score 越高越优，降序排列，第一位就是最高分 */
-    var sortedDesc = rCost.schemes.every(function (x, i, arr) {
-      return i === 0 || arr[i - 1].score >= x.score;
+    /* 排序方向：score 越低越优，升序排列，第一位就是代价最低的 */
+    var sortedAsc = rCost.schemes.every(function (x, i, arr) {
+      return i === 0 || arr[i - 1].score <= x.score;
     });
-    ok(sortedDesc, "方案按得分降序排列（分高在前）");
-    ok(rCost.schemes[0].score >= rCost.schemes[rCost.schemes.length - 1].score,
-      "第一名分数不低于最后一名");
+    ok(sortedAsc, "方案按额外代价升序排列（低者在前）");
+    ok(s.score < 100, "不再是「第一名恒 100 分」的旧口径");
 
     return generateSchemes(ms, "目的地", { weights: WEIGHT_PRESETS.comfort });
   }).then(function (rComfort) {
