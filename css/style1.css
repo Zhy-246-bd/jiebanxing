@@ -707,6 +707,22 @@ button, input, select, textarea { font-family: inherit; }
   line-height: 1.5;
 }
 
+/* 全国城市搜索添加行：输入框 + 「添加」按钮横排 */
+.city-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.city-add-row input {
+  flex: 1;
+  min-width: 0;
+}
+.city-add-row .btn-ghost {
+  flex: 0 0 auto;
+  padding: 0 18px;
+  white-space: nowrap;
+}
+
 /* ---------- 邀请码块 ---------- */
 .invite-box {
   margin-top: 22px;

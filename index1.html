@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>结伴行 · 短途结伴出游</title>
-  <link rel="stylesheet" href="css/style1.css?v=1117b">
+  <link rel="stylesheet" href="css/style1.css?v=1119a">
 </head>
 <body class="home">
 
@@ -349,6 +349,14 @@
           <div class="field">
             <label>出行城市（决定地名解析范围与公交换乘）</label>
             <select id="citySelect" name="city"></select>
+          </div>
+          <div class="field">
+            <label>没有想去的城市？搜索添加全国任意城市</label>
+            <div class="city-add-row">
+              <input id="cityAddInput" type="text" placeholder="输入城市名，如：长沙、桂林、拉萨、昆山" autocomplete="off">
+              <button type="button" id="cityAddBtn" class="btn btn-ghost">添加</button>
+            </div>
+            <div class="field-hint" id="cityAddHint">城市不在上面列表里就在这里输名字，查询约需 2 秒，成功后自动选为出行城市</div>
           </div>
           <div class="field">
             <label>目的地</label>
@@ -1615,6 +1623,20 @@
       state.selectedPlan = o.dataset.plan;
     }));
 
+    // 重画城市下拉（预置城市 + 本机联网添加过的自定义城市，添加新城市后要刷新）
+    function refreshCitySelect(selKey) {
+      const citySel = $('#citySelect');
+      if (!citySel || typeof getCityList !== 'function') return;
+      citySel.innerHTML = '';
+      getCityList().forEach(c => {
+        const o = document.createElement('option');
+        o.value = c.key;
+        o.textContent = c.custom ? c.name + '（自定义）' : c.name;
+        citySel.appendChild(o);
+      });
+      citySel.value = selKey || currentCityKey();
+    }
+
     // ---- 初始化 ----
     (function init() {
       // 日期默认值（创建房间时）：7 天后 09:30
@@ -1627,15 +1649,33 @@
       if (el) el.value = iso;
 
       // 城市下拉：预置城市 + 本机之前联网添加过的自定义城市
-      const citySel = $('#citySelect');
-      if (citySel && typeof getCityList === 'function') {
-        getCityList().forEach(c => {
-          const o = document.createElement('option');
-          o.value = c.key;
-          o.textContent = c.custom ? c.name + '（自定义）' : c.name;
-          citySel.appendChild(o);
+      refreshCitySelect();
+
+      // 全国城市搜索添加：city-online.js 查行政信息 + 地铁/火车站/景点，
+      // 组装成标准城市对象后 addCustomCity 塞进下拉（和成员端 restoreCityForJoin 同一套解析链路）
+      const cityAddInput = $('#cityAddInput');
+      if (cityAddInput && typeof prepareOnlineCity === 'function') {
+        const addCityOnline = () => {
+          const kw = cityAddInput.value.trim();
+          if (!kw) { toast('请输入城市名，如：长沙、桂林'); return; }
+          const btn = $('#cityAddBtn');
+          btn.disabled = true;
+          $('#cityAddHint').textContent = '正在查询「' + kw + '」…约需 2 秒（查地铁/火车站做集合点）';
+          prepareOnlineCity(kw).then(city => {
+            addCustomCity(city);
+            refreshCitySelect(city.key);
+            cityAddInput.value = '';
+            $('#cityAddHint').textContent = '已添加「' + city.name + '」，已选为出行城市';
+            toast('已添加城市：' + city.name);
+          }).catch(err => {
+            // 失败原因要如实显示：限频/网络/省名/查不到站，各有各的提示（city-online.js 里写好了）
+            $('#cityAddHint').textContent = err.message || '查询失败，请重试';
+          }).then(() => { btn.disabled = false; });
+        };
+        $('#cityAddBtn').addEventListener('click', addCityOnline);
+        cityAddInput.addEventListener('keydown', e => {
+          if (e.key === 'Enter') { e.preventDefault(); addCityOnline(); }  // 别让回车触发整个建房表单
         });
-        citySel.value = currentCityKey();
       }
 
       // 有上次的房间就提一句，方便回到房间继续（不自动跳转，避免打断演示）
@@ -1650,7 +1690,7 @@
 
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡、不挡点击，答辩前留着也无妨。 -->
-  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1115b</div>
+  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1119a</div>
 
 </body>
 </html>
