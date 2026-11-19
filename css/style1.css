@@ -1237,18 +1237,56 @@ button, input, select, textarea { font-family: inherit; }
 }
 
 
-/* 上次房间快速回入条：封面按钮下方，一键回到房间不用重输邀请码 */
-.resume-bar {
-  margin: 16px auto 0;
+/* 历史房间列表（封面"历史房间"按钮的弹窗内容） */
+.history-list {
+  margin: 16px 0 4px;
   display: flex;
-  gap: 12px;
+  flex-direction: column;
+  gap: 10px;
+}
+.history-item {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  font-size: 13px;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid rgba(135, 168, 188, .4);
+  border-radius: 12px;
+  background: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .2s, background .2s, transform .2s;
+}
+.history-item:hover {
+  border-color: var(--blue, #87A8BC);
+  background: #f6fafc;
+  transform: translateY(-1px);
+}
+.hi-code {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  color: var(--ink, #3a4249);
+  flex: 0 0 auto;
+}
+.hi-meta {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--ink-soft, #55656f);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hi-time {
+  flex: 0 0 auto;
+  font-size: 11px;
   color: var(--ink-faint, #9fb0bd);
 }
-.resume-bar b {
-  color: var(--ink, #3a4249);
-  letter-spacing: .08em;
+.history-empty {
+  padding: 26px 0 18px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-faint, #9fb0bd);
 }
