@@ -34,13 +34,53 @@
 /* Key 不进仓库（2026-11-10 起改为外部文件）：
    从 js/config.local.js 读 window.__AMAP_KEY__，该文件已写进 .gitignore。
    新拉代码的人第一次用：把 js/config.example.js 复制成 js/config.local.js，填上自己的 Key。
-   读不到 Key 不会报错，全部走本地估算——页面照常能跑，只是数据是估的（控制台 amapStats() 能看到）。 */
+   读不到 Key 不会报错，全部走本地估算——页面照常能跑，只是数据是估的（控制台 amapStats() 能看到）。
+   2026-11-19 起：配了 __AMAP_PROXY__（supabase/functions/amap 服务端代理）时，
+   __AMAP_KEY__ 留空也没关系——走代理，代理在服务端环境变量里补 Key，
+   浏览器和仓库里都不会出现 Key 明文。 */
 var AMAP_KEY = (function () {
   var g = (typeof globalThis !== "undefined") ? globalThis
         : (typeof window !== "undefined" ? window : {});
   var k = g.__AMAP_KEY__;
   return (typeof k === "string") ? k.trim() : "";
 })();
+
+/* ── 服务端代理（2026-11-19）：配了 __AMAP_PROXY__ 就走代理，Key 不落前端 ──
+   代理是 supabase/functions/amap（Edge Function），把 Key 放在服务端环境变量里。
+   没配代理时退回老行为（浏览器直连 restapi 并带 key），保证离线/本地演示仍能跑。
+   注意：走代理后 TIMEOUT 放宽到 12s，Edge Function 冷启动偶尔要 1~2 秒。 */
+var AMAP_PROXY = (function () {
+  var g = (typeof globalThis !== "undefined") ? globalThis
+        : (typeof window !== "undefined" ? window : {});
+  var p = g.__AMAP_PROXY__;
+  return (typeof p === "string") ? p.trim() : "";
+})();
+
+/* 网关鉴权用：Supabase 新版平台强制所有函数请求带 Authorization，
+   这里用项目里本就公开的 publishable key（js/cloud-config.js 同源），
+   它不承担权限，只是过门禁。 */
+var AMAP_PROXY_AUTH = (function () {
+  var g = (typeof globalThis !== "undefined") ? globalThis
+        : (typeof window !== "undefined" ? window : {});
+  if (typeof g.__AMAP_PROXY_AUTH__ === "string" && g.__AMAP_PROXY_AUTH__.trim()) {
+    return g.__AMAP_PROXY_AUTH__.trim();
+  }
+  /* 兜底：config 里没配就从云端配置对象里拿 */
+  try {
+    var c = g.JBX_CLOUD;
+    if (c && typeof c.supabaseAnonKey === "string" && c.supabaseAnonKey) return c.supabaseAnonKey;
+  } catch (e2) { /* 忽略 */ }
+  return "";
+})();
+
+/* 把直连 URL 改写成代理 URL：去掉 key 参数，把 path+query 塞进 q */
+function _viaProxy(url) {
+  if (!AMAP_PROXY) return url;
+  var m = /^https:\/\/restapi\.amap\.com(\/.*)$/.exec(url);
+  if (!m) return url;                       // 不是高德接口就原样发
+  var rest = m[1].replace(/([?&])key=[^&]*/gi, "$1").replace(/[?&]+$/, "");
+  return AMAP_PROXY + "?q=" + encodeURIComponent(rest);
+}
 
 /* ── 城市三件套：变量名是契约，js/cities.js 靠"给同名全局变量赋值"来切城市 ──
    · 名字不许改（改了 applyCity 静默失效，最难查）
@@ -68,6 +108,7 @@ var RETRY_DELAY_MS = 1000;                           // 限频/网络失败的�
 var RETRY_MAX = 3;                                   // 失败重试次数上限
 var SAME_POINT_KM = 0.05;                            // 起终点重合（<50 米）不发请求，直接返回 0
 var TIMEOUT_MS = 8000;                               // 单请求超时
+var PROXY_TIMEOUT_MS = 12000;                        // 走服务端代理时的超时（Edge Function 冷启动）
 var TAXI_BASE = 12, TAXI_PER_KM = 2.3;               // 打车费【仅兜底】用：正常走高德 taxi_cost，取不到才算公式
 
 var MODE_MAP = { taxi: "driving", bike: "bicycling", transit: "transit" };
@@ -122,10 +163,15 @@ function _requestOnce(url) {
 
       var fire = function () {
         var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
-        var timer = ctl ? setTimeout(function () { ctl.abort(); }, TIMEOUT_MS) : null;
+        var budget = AMAP_PROXY ? PROXY_TIMEOUT_MS : TIMEOUT_MS;   // 代理多给冷启动时间
+        var timer = ctl ? setTimeout(function () { ctl.abort(); }, budget) : null;
         _stats.requests++;
         _runUsed++;
-        fetch(url, { signal: ctl ? ctl.signal : undefined })
+        var opt = { signal: ctl ? ctl.signal : undefined };
+        if (AMAP_PROXY && AMAP_PROXY_AUTH) {
+          opt.headers = { Authorization: "Bearer " + AMAP_PROXY_AUTH };
+        }
+        fetch(_viaProxy(url), opt)
           .then(function (res) { return res.json(); })
           .then(function (body) {
             if (timer) clearTimeout(timer);
@@ -384,7 +430,7 @@ var _inflight = {};
 function queryRoute(origin, dest, mode) {
   if (!MODE_MAP[mode]) return Promise.resolve(_estimate(origin, dest, mode, "mode"));
   // 没配 Key（刚 clone 下来、或忘了建 config.local.js）：直接估算，一条请求都不发
-  if (!AMAP_KEY) return Promise.resolve(_estimate(origin, dest, mode, "no-key"));
+  if (!AMAP_KEY && !AMAP_PROXY) return Promise.resolve(_estimate(origin, dest, mode, "no-key"));
 
   // 路线 key 同样带城市前缀：同名地名在不同城市是不同的起终点
   var key = _ck("route|" + mode + "|" + origin + "|" + dest);
@@ -425,7 +471,7 @@ var _tipsCache = {};
  */
 function inputTips(keyword, city) {
   keyword = String(keyword || "").trim();
-  if (keyword.length < 2 || !AMAP_KEY) return Promise.resolve([]);
+  if (keyword.length < 2 || (!AMAP_KEY && !AMAP_PROXY)) return Promise.resolve([]);
   var c = String(city || AMAP_CITY_ADCODE);
   var ck = c + "|" + keyword;
   var hit = _cacheGet(_tipsCache, ck);
@@ -506,7 +552,7 @@ function regeo(lng, lat) {
   var ck = "regeo|" + L.toFixed(5) + "|" + A.toFixed(5);
   var hit = _cacheGet(_regeoCache, ck);
   if (hit) { _stats.cacheHits++; return Promise.resolve(hit); }
-  if (!AMAP_KEY) return Promise.resolve(fail("no-key"));    // 没配 Key：静默降级
+  if (!AMAP_KEY && !AMAP_PROXY) return Promise.resolve(fail("no-key"));    // 没配 Key 且没配代理：静默降级
 
   var url = "https://restapi.amap.com/v3/geocode/regeo?location=" + L + "," + A +
     "&radius=200&extensions=base&key=" + AMAP_KEY;
