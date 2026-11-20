@@ -5,6 +5,56 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>结伴行 · 方案结果</title>
   <link rel="stylesheet" href="css/style.css?v=1115b">
+  <link rel="stylesheet" href="css/style1.css?v=1119i">
+  <link rel="stylesheet" href="css/result.css?v=1120">
+  <style>
+    /* 本页补充：电脑端布局不动，只增强移动端与按钮交互；颜色全部走 CSS 变量 */
+
+    /* 移动端：标题用粗行楷 + 柔和入场动画（仅 transform / opacity） */
+    @media (max-width: 768px) {
+      body.result-page .header h1 {
+        font-weight: 700;
+        -webkit-animation: jbxTitleIn .6s ease-out both;
+        animation: jbxTitleIn .6s ease-out both;
+      }
+    }
+    @-webkit-keyframes jbxTitleIn {
+      from { opacity: 0; -webkit-transform: translateY(-8px); transform: translateY(-8px); }
+      to   { opacity: 1; -webkit-transform: translateY(0);    transform: translateY(0); }
+    }
+    @keyframes jbxTitleIn {
+      from { opacity: 0; -webkit-transform: translateY(-8px); transform: translateY(-8px); }
+      to   { opacity: 1; -webkit-transform: translateY(0);    transform: translateY(0); }
+    }
+
+    /* 开始导航：未选方案时置灰、不可点、无 hover 效果（不写死颜色，用透明度） */
+    body.result-page .plan-pick-bar .btn:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    /* 可用态：过渡 + 触摸时轻微缩放反馈，只动 transform，不影响布局 */
+    body.result-page .plan-pick-bar .btn {
+      -webkit-transition: -webkit-transform .12s ease, opacity .2s ease;
+      transition: transform .12s ease, opacity .2s ease;
+    }
+    body.result-page .plan-pick-bar .btn:not(:disabled):active {
+      -webkit-transform: scale(.97);
+      transform: scale(.97);
+    }
+
+    /* 移动端：地图容器与对比表外层不超出屏幕（表格内部仍可横滑） */
+    @media (max-width: 768px) {
+      body.result-page #mapBox { max-width: 100%; box-sizing: border-box; }
+      body.result-page #compareTable { max-width: 100%; overflow: hidden; }
+      body.result-page #compareTable .jbx-ct-wrap { -webkit-overflow-scrolling: touch; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      body.result-page .header h1 { -webkit-animation: none; animation: none; }
+      body.result-page .plan-pick-bar .btn { -webkit-transition: none; transition: none; }
+    }
+  </style>
 </head>
 <body class="result-page">
   <div class="page">
@@ -20,12 +70,12 @@
       <div id="mapTabs"></div>
       <div id="mapArea"></div>
       <div class="jbx-legend">
-        <span><i style="background:#3182ce"></i>地铁/公交</span>
-        <span><i style="background:#dd6b20"></i>打车</span>
-        <span><i style="background:#38a169"></i>骑行</span>
-        <span><i class="dot" style="background:#3182ce"></i>起点</span>
-        <span><i class="dot" style="background:#f6c344"></i>集合点</span>
-        <span><i class="dot" style="background:#e53e3e"></i>目的地</span>
+        <span><i style="background:var(--jbx-transit)"></i>地铁/公交</span>
+        <span><i style="background:var(--jbx-taxi)"></i>打车</span>
+        <span><i style="background:var(--jbx-bike)"></i>骑行</span>
+        <span><i class="dot" style="background:var(--jbx-start)"></i>起点</span>
+        <span><i class="dot" style="background:var(--jbx-meet)"></i>集合点</span>
+        <span><i class="dot" style="background:var(--jbx-dest)"></i>目的地</span>
       </div>
       <div id="mapHint"></div>
     </div>
@@ -36,7 +86,7 @@
 
     <div class="scheme-head">
       <h2>可选方案</h2>
-      <span>三种走法 · 综合得分越高越优</span>
+      <span>三种走法 · 额外代价越低越优</span>
     </div>
 
     <div class="scheme-guide">
@@ -52,7 +102,7 @@
     <!-- 选中方案后的操作条：默认隐藏，选中态由 JS 添加（卡片加 .is-selected 或 aria-selected="true"）后显示 -->
     <div class="plan-pick-bar" id="planPickBar" hidden>
       <p>已选定该方案，开启路线指引</p>
-      <button class="btn btn-primary" id="startNavBtn" type="button">开始导航</button>
+      <button class="btn btn-primary" id="startNavBtn" type="button" disabled>开始导航</button>
     </div>
 
     <div id="compareTable"></div>
@@ -61,9 +111,8 @@
     <button class="btn btn-ghost" id="backBtn">← 返回修改信息</button>
   </div>
 
-  <!-- 本地 Key（不进仓库）：文件不存在时静默跳过，页面照常跑，只是地图显示配置指引。
-       新拉代码的人：复制 js/config.example.js 为 js/config.local.js，填入 __AMAP_JS_KEY__ 与 __AMAP_JS_CODE__。 -->
-  <!-- 配置：config.js 进仓库（线上 GitHub Pages 靠它拿 Key）；config.local.js 不进仓库（本地覆盖）。
+  <!-- 配置：config.js 进仓库（线上 GitHub Pages 靠它拿 Key 和代理地址）；
+       config.local.js 不进仓库（本地覆盖）。
        新拉代码的人：复制 js/config.example.js 为 js/config.local.js，填入自己的 Key。 -->
   <script src="js/config.js?v=1119k"
           onerror="console.info('%c[结伴行] 未找到 js/config.js，地图不可用。','color:#e67e22')"></script>
@@ -115,6 +164,52 @@
         '</div>' + legsHtml;
       box.appendChild(card);
     });
+
+    /* 选中方案 + 开始导航：本页交互，不改动地图、对比表原有逻辑。
+       · 未选方案：planPickBar 隐藏，startNavBtn 置灰禁用、hover 无效果
+       · 选中某方案：操作条出现，按钮恢复可用并带柔和触摸反馈
+       · 点“开始导航”：把地图切到该方案的路线标签，并滚动到地图区 */
+    (function () {
+      var bar = document.getElementById("planPickBar");
+      var navBtn = document.getElementById("startNavBtn");
+      var list = document.getElementById("schemeList");
+      if (!bar || !navBtn || !list) { return; }
+
+      var selectedIndex = -1;
+      var cards = list.querySelectorAll(".scheme-card");
+
+      function setNavEnabled(enabled) {
+        if (enabled) { navBtn.removeAttribute("disabled"); }
+        else { navBtn.setAttribute("disabled", "disabled"); }
+      }
+
+      // 初始态：未选 → 禁用（HTML 上 disabled 属性已是基线，这里保持一致）
+      setNavEnabled(false);
+
+      Array.prototype.forEach.call(cards, function (card, i) {
+        card.addEventListener("click", function () {
+          Array.prototype.forEach.call(cards, function (c) {
+            c.classList.remove("is-selected");
+            c.removeAttribute("aria-selected");
+          });
+          card.classList.add("is-selected");
+          card.setAttribute("aria-selected", "true");
+          selectedIndex = i;
+          bar.hidden = false;
+          setNavEnabled(true);
+        });
+      });
+
+      navBtn.addEventListener("click", function () {
+        if (navBtn.disabled || selectedIndex < 0) { return; }
+        var tabs = document.querySelectorAll("#mapTabs .jbx-tab");
+        if (tabs[selectedIndex]) { tabs[selectedIndex].click(); }
+        var mapBox = document.getElementById("mapBox");
+        if (mapBox && typeof mapBox.scrollIntoView === "function") {
+          mapBox.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      });
+    })();
   </script>
   <script src="js/compare-table.js?v=1119i"></script>
   <script src="js/data-hint.js?v=1115b"></script>
