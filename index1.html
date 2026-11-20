@@ -810,6 +810,16 @@
       return true;
     }
 
+    // 一对坐标「真的存在」的判断。
+    // ⚠ 为什么不能只写 isFinite：JS 里 isFinite(null) === true、isFinite('') === true，
+    //   所以"数据库这列是 NULL"会被当成"坐标是 0"，最后经 Number() 变成 [0, 0]，
+    //   地图上就是一个画到几内亚湾的蓝点。必须显式排除 null / undefined / 空串。
+    function hasCoord(lng, lat) {
+      return lng !== null && lng !== undefined && lng !== '' &&
+             lat !== null && lat !== undefined && lat !== '' &&
+             isFinite(lng) && isFinite(lat);
+    }
+
     // 云端成员行 → 页面成员对象（两边字段名不同，映射只在这一个地方做）
     function mapCloudMember(row, myToken) {
       const isMe = row.member_token === myToken;
@@ -822,14 +832,17 @@
         filled: !!(row.origin && String(row.origin).trim()),
         isMe: isMe,
         startFrom: row.origin || '',
-        startCoord: (isFinite(row.origin_lng) && isFinite(row.origin_lat)) ? { lng: row.origin_lng, lat: row.origin_lat } : null,
+        // ⚠ isFinite(null) 是 true（JS 陷阱），只判 isFinite 会把"没有坐标"当成坐标 (0,0)，
+        //   结果蓝点画到几内亚湾。必须同时排除 null / undefined。
+        startCoord: hasCoord(row.origin_lng, row.origin_lat) ? { lng: row.origin_lng, lat: row.origin_lat } : null,
         pref: prefs.join(','),
         window: win,
         budget: row.budget ? String(row.budget) : ''
       };
       // 成员的精确坐标（他从联想里选的）注入本机解析缓存：
       // 发起人生成方案时全链路都用官方 POI 坐标，不再依赖地理编码猜位置
-      if (row.origin && isFinite(row.origin_lng) && isFinite(row.origin_lat) && typeof seedCoord === 'function') {
+      // ⚠ 同样必须用 hasCoord：给 null 坐标写缓存，会让该地名的解析结果变成 (0,0)
+      if (row.origin && hasCoord(row.origin_lng, row.origin_lat) && typeof seedCoord === 'function') {
         seedCoord(row.origin, row.origin_lng, row.origin_lat);
       }
     }
