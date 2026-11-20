@@ -53,7 +53,30 @@
            isFinite(lng) && isFinite(lat);
   }
 
-  var MODE_COLOR = { transit: "#3182ce", taxi: "#dd6b20", bike: "#38a169" };
+  /* ---------------- 配色：统一读 css/result.css :root 的 6 个 --jbx-* 变量 ----------------
+   * 陈滢竹换主题只改 result.css 那 6 个值，图例 / 标记 / 路线会自动一起变，
+   * 不用 !important 硬压，也不会出现「图例是旧色、线是新色」。
+   * 注意：高德 Polyline 的 strokeColor 不认 var(--x)（底层 canvas/SVG 绘制），
+   * 必须解析成真实色值再传；result.css 没加载时退回下面兜底色，保证不白屏。 */
+  var COLOR_FALLBACK = {
+    transit: "#3182ce", taxi: "#dd6b20", bike: "#38a169",
+    start: "#3182ce", meet: "#f6c344", dest: "#e53e3e"
+  };
+  var CSS_VAR = {
+    transit: "--jbx-transit", taxi: "--jbx-taxi", bike: "--jbx-bike",
+    start: "--jbx-start", meet: "--jbx-meet", dest: "--jbx-dest"
+  };
+  function themeColor(key) {
+    var v = "";
+    try {
+      if (typeof window !== "undefined" && window.getComputedStyle && document.documentElement) {
+        v = (window.getComputedStyle(document.documentElement)
+          .getPropertyValue(CSS_VAR[key]) || "").trim();
+      }
+    } catch (e) { /* 变量未定义或非浏览器环境 → 用兜底 */ }
+    /* 只接受浏览器能画的色值，避免 result.css 里写错值把地图画花 */
+    return /^(#|rgb|hsl)/i.test(v) ? v : COLOR_FALLBACK[key];
+  }
   var TIMEOUT_MS = 15000;     // 单次路线规划 / 地名解析的超时
   var MIN_INTERVAL_MS = 600;  // 两次请求的最小间隔：个人 Key 约 3 QPS，连着打会被限频（10021）
   var MAX_CONCURRENT = 2;     // 并发上限
@@ -164,9 +187,9 @@
       ".jbx-mk{position:relative}",
       ".jbx-mk-dot{display:block;width:14px;height:14px;border-radius:50%;border:2.5px solid #fff;",
       "  box-shadow:0 1px 4px rgba(0,0,0,.35)}",
-      ".jbx-mk-start .jbx-mk-dot{background:#3182ce}",
-      ".jbx-mk-meet  .jbx-mk-dot{background:#f6c344;border-color:#fff}",
-      ".jbx-mk-dest  .jbx-mk-star{display:block;font-size:20px;line-height:1;color:#e53e3e;",
+      ".jbx-mk-start .jbx-mk-dot{background:var(--jbx-start,#3182ce)}",
+      ".jbx-mk-meet  .jbx-mk-dot{background:var(--jbx-meet,#f6c344);border-color:#fff}",
+      ".jbx-mk-dest  .jbx-mk-star{display:block;font-size:20px;line-height:1;color:var(--jbx-dest,#e53e3e);",
       "  text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff;font-weight:700}",
       ".jbx-mk-label{position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);",
       "  white-space:nowrap;background:rgba(255,255,255,.95);border:1px solid #d8e1ea;border-radius:5px;",
@@ -524,7 +547,7 @@
           if (!o || !d) return null;
           var path = bySeg[seg.from + "|" + seg.to + "|" + seg.mode];
           var opts = {
-            strokeColor: MODE_COLOR[seg.mode] || "#718096",
+            strokeColor: themeColor(seg.mode) || "#718096",
             strokeWeight: 4, strokeOpacity: 0.85,
             lineJoin: "round", lineCap: "round", zIndex: 5
           };

@@ -6,7 +6,7 @@
   <title>结伴行 · 方案结果</title>
   <link rel="stylesheet" href="css/style.css?v=1115b">
   <link rel="stylesheet" href="css/style1.css?v=1119i">
-  <link rel="stylesheet" href="css/result.css?v=1120">
+  <link rel="stylesheet" href="css/result.css?v=1120a">
   <style>
     /* 本页补充：电脑端布局不动，只增强移动端与按钮交互；颜色全部走 CSS 变量 */
 
@@ -70,12 +70,12 @@
       <div id="mapTabs"></div>
       <div id="mapArea"></div>
       <div class="jbx-legend">
-        <span><i style="background:var(--jbx-transit)"></i>地铁/公交</span>
-        <span><i style="background:var(--jbx-taxi)"></i>打车</span>
-        <span><i style="background:var(--jbx-bike)"></i>骑行</span>
-        <span><i class="dot" style="background:var(--jbx-start)"></i>起点</span>
-        <span><i class="dot" style="background:var(--jbx-meet)"></i>集合点</span>
-        <span><i class="dot" style="background:var(--jbx-dest)"></i>目的地</span>
+        <span><i style="background:var(--jbx-transit,#3182ce)"></i>地铁/公交</span>
+        <span><i style="background:var(--jbx-taxi,#dd6b20)"></i>打车</span>
+        <span><i style="background:var(--jbx-bike,#38a169)"></i>骑行</span>
+        <span><i class="dot" style="background:var(--jbx-start,#3182ce)"></i>起点</span>
+        <span><i class="dot" style="background:var(--jbx-meet,#f6c344)"></i>集合点</span>
+        <span><i class="dot" style="background:var(--jbx-dest,#e53e3e)"></i>目的地</span>
       </div>
       <div id="mapHint"></div>
     </div>
@@ -149,6 +149,7 @@
         }).join("　再　");
         return '<div class="leg"><b>' + l.member + '</b>' +
           (l.isBottleneck ? '<span class="bottleneck-tag">瓶颈成员</span>' : '') +
+          (l.overBudget ? '<span class="over-budget">超预算 ¥' + l.overBudgetBy + '</span>' : '') +
           '：' + segs + '</div>';
       }).join("");
       card.innerHTML =
@@ -213,6 +214,6 @@
   </script>
   <script src="js/compare-table.js?v=1119i"></script>
   <script src="js/data-hint.js?v=1115b"></script>
-  <script src="js/map-view.js?v=1119g"></script>
+  <script src="js/map-view.js?v=1120a"></script>
 </body>
 </html>
