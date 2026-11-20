@@ -172,8 +172,10 @@
 
     var html = [];
     html.push('<div class="jbx-ct-block">');
-    html.push('<h3 class="jbx-ct-title">三方案指标对比');
-    html.push('<small>绿底 = 该列最优；五项都是越小越好，额外代价 0 = 三个方案里综合最省事</small></h3>');
+    /* Q-02 之后人数少时可能只有 1~2 套方案，标题与副注不能写死"三" */
+    var nSchemes = schemes.length;
+    html.push('<h3 class="jbx-ct-title">' + (nSchemes >= 3 ? '三方案指标对比' : '方案指标对比（共 ' + nSchemes + ' 套）'));
+    html.push('<small>绿底 = 该列最优；五项都是越小越好，额外代价 0 = 本次所有方案里综合最省事</small></h3>');
     html.push('<div class="jbx-ct-wrap">');
     html.push('<table class="' + TABLE_CLASS + '">');
     html.push("<thead><tr>");
@@ -212,7 +214,7 @@
 
     html.push("</tbody></table></div>");
     html.push('<p class="jbx-ct-note">指标含义：总耗时 / 总费用 = 全员合计；最长单人 = 用时最久的那个人（即瓶颈）；' +
-      '最长等待 = 等人对齐出发所花的额外时间；额外代价 = 四项各比“三方案里最好那个”多付出的比例，按发起人设的权重加权，'
+      '最长等待 = 等人对齐出发所花的额外时间；额外代价 = 四项各比“本次全部方案里最好那个”多付出的比例，按发起人设的权重加权，'
       + '0 表示综合最省事，越低越优（不是百分制得分）。</p>');
     html.push("</div>");
     return html.join("");

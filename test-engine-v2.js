@@ -242,14 +242,67 @@ function case5() {
 function case6() {
   console.log("\n【6】边界：0 人");
   return generateSchemes([], "目的地").then(function (r) {
-    eq(r.schemes.length, 3, "仍然返回三个方案");
+    eq(r.schemes.length, 1, "0 人：只保留方案一（没有正文可算）");
     ok(r.schemes.every(function (s) { return s.metrics.totalTimeMin === 0; }), "指标全为 0，没有 NaN");
+  });
+}
+
+/* ---------------- 用例 7：单人场景（测试清单 Q-02） ---------------- */
+function case7() {
+  console.log("\n【7】单人场景（Q-02）：只该出方案一，且不该白发 geocode 请求");
+  var calls = { route: 0, geo: 0 };
+  var baseRoute = global.queryRoute, baseGeo = global._geoResolve;
+  global.queryRoute = function () { calls.route++; return baseRoute.apply(null, arguments); };
+  global._geoResolve = function () { calls.geo++; return baseGeo.apply(null, arguments); };
+
+  var ms = [M("张海燕", "A站", "transit", 20)];
+  return generateSchemes(ms, "目的地").then(function (r) {
+    global.queryRoute = baseRoute;
+    global._geoResolve = baseGeo;
+
+    eq(r.schemes.length, 1, "只有 1 张卡片（方案二、方案三不再出现）");
+    eq(r.schemes[0].type, "direct", "留下的就是方案一：全部直达");
+    eq(r.skipped.map(function (s) { return s.type; }), ["meet", "partial"], "skipped 里写清跳过了哪两套");
+    ok(r.skipped.every(function (s) { return !!s.reason; }), "每套都给了不适用的原因",
+      r.skipped.map(function (s) { return s.reason; }));
+    ok(r.schemes[0].conclusion.indexOf("只有你 1 人") >= 0, "结论里说明了为什么只有一套方案",
+      r.schemes[0].conclusion);
+
+    eq(r.schemes[0].metrics.maxWaitMin, 0, "最长等待为 0（一个人不用等人）");
+    eq(r.schemes[0].legs.length, 1, "只有一条腿");
+    /* 额外代价口径下，只有一套方案时它自己就是基准 → 代价 0，不再出现 100.6 分那种怪数 */
+    eq(r.schemes[0].score, 0, "额外代价为 0（自己就是基准）");
+    ok(isFinite(r.schemes[0].score), "得分是有限数字，没有 NaN");
+
+    eq(calls.route, 1, "只发了 1 次路线请求（原来单人也要 10 次左右）");
+    eq(calls.geo, 0, "方案一不需要坐标，一次 geocode 都没发");
+  }).catch(function (e) {
+    global.queryRoute = baseRoute;
+    global._geoResolve = baseGeo;
+    ok(false, "单人场景抛错了：" + e.message);
+  });
+}
+
+/* ---------------- 用例 8：双人场景（方案三与方案二等价） ---------------- */
+function case8() {
+  console.log("\n【8】双人场景：方案三与方案二等价，应只出两套");
+  var ms = [M("甲", "A站"), M("乙", "B站")];
+  return generateSchemes(ms, "目的地").then(function (r) {
+    eq(r.schemes.map(function (s) { return s.type; }).sort(), ["direct", "meet"], "两套：直达 + 全员汇合");
+    eq(r.skipped.map(function (s) { return s.type; }), ["partial"], "方案三被标为不适用");
+    ok(r.schemes[0].conclusion.indexOf("等价") >= 0, "结论里解释了方案三为什么省掉",
+      r.schemes[0].conclusion);
+    var meet = r.schemes.filter(function (s) { return s.type === "meet"; })[0];
+    eq(meet.legs.length, 2, "方案二两条腿，两人都到同一个集合点");
+    ok(!!meet.meetingPoint, "方案二有集合点");
+    ok(r.schemes.every(function (s) { return isFinite(s.score); }), "两套方案的额外代价都是有效数字",
+      r.schemes.map(function (s) { return s.score; }));
   });
 }
 
 /* ---------------- 跑 ---------------- */
 case1()
-  .then(case2).then(case3).then(case4).then(case5).then(case6)
+  .then(case2).then(case3).then(case4).then(case5).then(case6).then(case7).then(case8)
   .then(function () {
     console.log("\n================ 结果：" + pass + " 通过 / " + fail + " 失败 ================");
     if (fail) process.exit(1);

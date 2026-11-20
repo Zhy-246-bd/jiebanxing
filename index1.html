@@ -1956,7 +1956,7 @@
       }
       if (!state.cityKey) { toast('本机找不到房间城市，请回首页重新选城市后再建房'); return; }
 
-      openConfirm('确认按当前 ' + state.members.length + ' 位成员生成三套方案？生成后所有成员都能看到同一份结果。', doGenerate);
+      openConfirm('确认按当前 ' + state.members.length + ' 位成员生成出行方案？人数不同方案数不同（1 人 1 套、2 人 2 套、3 人起 3 套），生成后所有成员都能看到同一份结果。', doGenerate);
     });
 
     // 【2026-11-14 已停用】方案不再在本页渲染：改由 engine.js 真算后跳 result.html，

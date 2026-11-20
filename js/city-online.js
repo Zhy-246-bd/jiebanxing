@@ -211,14 +211,29 @@ function _poiSearch(adcode, keywords, types, limit) {
 
 /* 剔除离市中心太远的站：郊县站（阳朔站这种）拿来做"全员汇合点"不合理，
    而且超出 amap-api.js 的 60km 城市校验后会直接降级 */
-var STATION_MAX_KM = 50;
+/* Q-08（闫雅欣 11-13）：阳朔站距桂林市区约 50km，贴着旧阈值 50 被保留，
+   方案二有概率把汇合点定在阳朔。两层防护：
+   ① 阈值收紧到 35km（还是按"离市中心多远"过滤，坐标来自地铁站检索结果）；
+   ② 站名直接含郊县名的站无条件排除——阈值过滤兜不住"刚好贴线"的情况，
+      名单按需扩展（格式：城市 adcode 前两位不区分，全部做包含匹配）。 */
+var STATION_MAX_KM = 35;
+var SUBURB_NAME_RE = /(阳朔|恭城|全州|兴安|灵川|灌阳|资源|龙胜|荔浦|平乐)/;
+
+function _isSuburbStation(name) {
+  return SUBURB_NAME_RE.test(String(name || ""));
+}
 
 function _nearCenter(items, center) {
-  if (typeof _distanceKm !== "function") return items;
+  /* 郊县站名排除不依赖坐标，放在距离过滤之前 */
+  var noSuburb = (items || []).filter(function (it) {
+    return !_isSuburbStation(it.name);
+  });
+  if (!noSuburb.length) noSuburb = items || [];   // 全被排除时兜底，不返回空
+  if (typeof _distanceKm !== "function") return noSuburb;
   var p = String(center || "").split(",");
   var c = { lng: parseFloat(p[0]), lat: parseFloat(p[1]) };
-  if (!isFinite(c.lng) || !isFinite(c.lat)) return items;
-  return items.filter(function (it) {
+  if (!isFinite(c.lng) || !isFinite(c.lat)) return noSuburb;
+  return noSuburb.filter(function (it) {
     if (!isFinite(it.lng) || !isFinite(it.lat)) return true;   // 没坐标的不敢丢
     return _distanceKm(c, it) <= STATION_MAX_KM;
   });

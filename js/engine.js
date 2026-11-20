@@ -10,6 +10,14 @@
  *   ④ 打分模型      → WEIGHT_PRESETS / getWeights / setWeights，
  *                     四指标权重可运行时调整，也读 localStorage 的 jbx_weights
  *
+ * v0.6（2026-11-20）修测试清单 Q-02（单人场景）：
+ *   ⑤ 方案适用性 → applicableTypes()：方案二/三是"多人"才成立的比较，
+ *      1 人时"全员汇合"没人可汇合、"部分汇合"与直达逐字相同，硬算出来的只是
+ *      一套比直达更慢的假方案（测试清单 Q-02 里那个 100.6 分的怪物）。
+ *      现在 1 人只生成方案一，2 人省掉方案三（结伴就等于全员汇合），
+ *      不生成的原因写进 result.skipped，并在推荐卡片的结论里说一句。
+ *      ★ 打分仍交给 scoreSchemes（七点五，组长口径），此处只决定"生成哪几套"。
+ *
  * 对外契约一字没改（三条铁律第 1、2 条）：
  *   generateSchemes(members, dest[, opts]) → Promise<{ schemes, weights, weightsName }>
  *   方案结果 JSON 的原有字段全部保留，只**新增**了可选字段（见文件末尾清单）；
@@ -545,6 +553,51 @@ function finishScheme(scheme) {
   return scheme;
 }
 
+/* ========== 六点五、方案适用性（v0.6，Q-02 单人场景） ========== */
+/* 三套方案得有三个人才凑得齐：
+ *   1 人 → 只有方案一有意义。方案二"全员汇合"没人可汇合，实际只是"先跑到某个站
+ *          再坐公交去目的地"，比直达更慢更贵，却照样参与打分排序（Q-02 里那套
+ *          100.6 分就是这么来的）；方案三没有同伴可结对，会逐字复制方案一。
+ *   2 人 → 方案二的"全员汇合"就是"两人结伴"，方案三是它的翻版，省掉。
+ *   3 人以上 → 三套才真正互不相同，全都生成。
+ * 返回本次要生成的方案类型，按 一、二、三 顺序。
+ */
+function applicableTypes(n) {
+  if (n <= 1) return ["direct"];
+  if (n === 2) return ["direct", "meet"];
+  return ["direct", "meet", "partial"];
+}
+
+var SCHEME_META = {
+  direct: { type: "direct", name: "方案一：全部直达" },
+  meet: { type: "meet", name: "方案二：全员汇合" },
+  partial: { type: "partial", name: "方案三：部分汇合" }
+};
+
+function _skipReason(type, n) {
+  if (type === "meet")
+    return "只有 1 人，没有同伴可以汇合，全员汇合不适用";
+  if (type === "partial")
+    return (n === 2)
+      ? "2 人结伴就等于全员汇合，与方案二完全等价，部分汇合不适用"
+      : "只有 1 人，没有同伴可以结伴，部分汇合与直达完全相同";
+  return "不适用";
+}
+
+/* 结论文案优先用 result-text.js（闫雅欣的文件）里的同名键，没有就用这里的默认值，
+   她想改说法只改自己的文件，不用碰引擎 */
+function _txt(key, def) {
+  if (typeof RESULT_TEXT !== "undefined" && RESULT_TEXT &&
+      typeof RESULT_TEXT[key] === "string" && RESULT_TEXT[key]) return RESULT_TEXT[key];
+  return def;
+}
+
+function _skippedNote(skipped, n) {
+  if (n < 1) return "还没有成员，只生成直达方案";
+  if (n === 1) return _txt("solo", "只有你 1 人：直达就是最优，无需汇合与结伴（方案二、方案三已省略）");
+  return _txt("pairwise", "2 人结伴等于全员汇合，方案三与方案二等价，已省略");
+}
+
 /* ================= 七、打分模型（权重可调） ================= */
 
 /* 四套预设：答辩时"让用户按场景选偏好"，权重一眼能讲清 */
@@ -674,6 +727,7 @@ function scoreSchemes(schemes, weights) {
  */
 function generateSchemes(members, dest, opts) {
   opts = opts || {};
+  members = members || [];
   var weights = _sanitizeWeights(opts.weights || getWeights());
   var stage = function (s) {
     if (typeof opts.onStage === "function") {
@@ -681,19 +735,44 @@ function generateSchemes(members, dest, opts) {
     }
   };
 
-  stage("正在解析出发地坐标…");
+  /* ★ v0.6：先定"这次该生成哪几套"，不适用的一律不生成，只留原因（Q-02） */
+  var plan = applicableTypes(members.length);
+  var skipped = [];
+  ["meet", "partial"].forEach(function (t) {
+    if (plan.indexOf(t) < 0) {
+      skipped.push({ type: t, name: SCHEME_META[t].name, reason: _skipReason(t, members.length) });
+    }
+  });
 
-  return _buildGeo(members, dest).then(function (geo) {
-    stage("方案一：计算全部直达…");
-    return schemeDirect(members, dest).then(function (s1) {
-      stage("方案二：筛选集合点，计算全员汇合…");
-      return schemeMeet(members, dest, geo).then(function (s2) {
-        stage("方案三：按距离配对，计算部分汇合…");
-        return schemePartial(members, dest, geo).then(function (s3) {
-          return [s1, s2, s3];
-        });
+  /* 方案一不需要坐标，只有方案二/三要。单人场景因此一次 geocode 都不发，
+     请求数从原来 10 次左右降到 1 次（只剩那条直达路线） */
+  var needGeo = plan.indexOf("meet") >= 0 || plan.indexOf("partial") >= 0;
+
+  stage(members.length <= 1 ? "只有 1 人：直接计算直达路线…" : "正在解析出发地坐标…");
+
+  var geoReady = needGeo ? _buildGeo(members, dest) : Promise.resolve(null);
+
+  var runner = {
+    direct: function (g) { return schemeDirect(members, dest); },
+    meet: function (g) { return schemeMeet(members, dest, g); },
+    partial: function (g) { return schemePartial(members, dest, g); }
+  };
+  var stageText = {
+    direct: "方案一：计算全部直达…",
+    meet: "方案二：筛选集合点，计算全员汇合…",
+    partial: "方案三：按距离配对，计算部分汇合…"
+  };
+
+  return geoReady.then(function (geo) {
+    /* 串行生成：进度提示能按 一→二→三 的顺序刷，也不至于三套同时抢接口配额 */
+    var chain = Promise.resolve(), out = [];
+    plan.forEach(function (t) {
+      chain = chain.then(function () {
+        stage(stageText[t]);
+        return runner[t](geo).then(function (s) { out.push(s); });
       });
     });
+    return chain.then(function () { return out; });
   }).then(function (schemes) {
     stage("按权重打分并排序…");
 
@@ -705,17 +784,24 @@ function generateSchemes(members, dest, opts) {
     var TXT = (typeof RESULT_TEXT === "undefined")
       ? { best: "综合最优，推荐优先考虑", close: "耗时接近最优，可作备选", far: "耗时或花费偏高，仅在特殊需求时选" }
       : RESULT_TEXT;
-    list[0].conclusion = TXT.best;
-    for (var i = 1; i < list.length; i++) {
-      list[i].conclusion = list[i].metrics.totalTimeMin <= list[0].metrics.totalTimeMin * 1.1
-        ? TXT.close : TXT.far;
-    }
+    list.forEach(function (s, i) {
+      var base = (i === 0)
+        ? TXT.best
+        : (s.metrics.totalTimeMin <= list[0].metrics.totalTimeMin * 1.1 ? TXT.close : TXT.far);
+
+      /* ★ v0.6：只在推荐的那张卡片上补一句"为什么只有这几套方案"，
+         用户看到方案变少时不至于以为是程序出错（Q-02） */
+      if (i === 0 && skipped.length) base += "　" + _skippedNote(skipped, members.length);
+      s.conclusion = base;
+    });
 
     return {
       schemes: list,
       weights: scored.weights,               // 本次实际使用的权重（已归一化到和为 1）
       weightsName: scored.weightsName,       // 命中的预设名，否则"自定义"
-      baseline: scored.baseline              // 每项指标在三方案里的最优值（页面可写"比最优多 X 分钟"）
+      baseline: scored.baseline,             // 每项指标在各方案里的最优值
+      skipped: skipped,                      // 新增：本次没生成的方案 + 原因（空数组 = 三套都生成了）
+      memberCount: members.length            // 新增：参与计算的人数
     };
   });
 }
@@ -743,7 +829,16 @@ function generateSchemes(members, dest, opts) {
  *   scoreDetail     Object  四个分项的加权贡献
  *
  * generateSchemes 返回值上：
- *   weights / weightsName
+ *   weights / weightsName / baseline
+ *   skipped       Array   本次没生成的方案 [{type, name, reason}]（空数组 = 三套都生成了）
+ *   memberCount   Number  参与计算的人数
+ *
+ * ★ v0.6（Q-02）：1 人 → schemes 只有方案一；2 人 → 方案一 + 方案二；
+ *   3 人以上才是三套。页面遍历 schemes 就行，不需要判断长度（只剩一张卡片时
+ *   它就是"★ 推荐"）。不生成的原因在 result.skipped，结论行里也写了一句。
+ *   想改这句话的说法，在 result-text.js 里加键即可（不用改引擎）：
+ *     RESULT_TEXT.solo      单人时那句
+ *     RESULT_TEXT.pairwise  双人时那句
  *
  * ★ 张宇桐要在结果页高亮超预算，渲染 leg 时加一行即可（不用改引擎）：
  *   (l.overBudget ? '<span class="over-budget">超预算 ¥' + l.overBudgetBy + '</span>' : '')

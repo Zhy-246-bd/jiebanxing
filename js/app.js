@@ -114,7 +114,7 @@ document.getElementById("generate").addEventListener("click", function () {
   }).catch(function (err) {
     alert("计算出错：" + err.message);
     btn.disabled = false;
-    btn.textContent = "生成三套方案";
+    btn.textContent = "重新生成方案";
   });
 });
 
