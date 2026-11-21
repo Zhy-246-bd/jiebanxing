@@ -1423,8 +1423,15 @@
       if (!btn || !input) return;
       const btnText = btn.textContent;
       btn.addEventListener('click', () => {
-        if (!navigator.geolocation) {
-          toast('当前环境不支持定位（本地文件打开时没有定位权限），请用地图选点或手动输入');
+        // 三条定位通道，按可靠性排：
+        //   ① HBuilderX / uni-app 打包的 APK 会注入 plus 对象，用它自带的定位
+        //      API —— 不经过浏览器授权弹窗，在 App 里真的能用；
+        //   ② 普通浏览器 / 手机自带浏览器 → navigator.geolocation；
+        //   ③ 都不行 → 引导用地图选点（不依赖任何定位权限）。
+        const hasPlus = !!(window.plus && window.plus.geolocation &&
+                           typeof window.plus.geolocation.getCurrentPosition === 'function');
+        if (!hasPlus && !navigator.geolocation) {
+          toast('当前环境不支持定位：请点「📍 地图选点」把图钉对准出发位置');
           return;
         }
         btn.disabled = true;
@@ -1434,10 +1441,10 @@
           btn.textContent = btnText;
           if (msg) toast(msg);
         };
-        navigator.geolocation.getCurrentPosition(pos => {
-          // WGS → GCJ：不转的话在高德地图上整条路线都会偏
-          const c = wgs2gcj(pos.coords.longitude, pos.coords.latitude);
-          const lng = Number(c.lng.toFixed(6)), lat = Number(c.lat.toFixed(6));
+
+        /* 拿到坐标后统一走这里：逆地理 → 回填输入框 → 写 picked / 缓存 */
+        const useCoord = (lng0, lat0) => {
+          const lng = Number(lng0.toFixed(6)), lat = Number(lat0.toFixed(6));
           const coordName = lng.toFixed(5) + ',' + lat.toFixed(5);
           const apply = (name, adcode) => {
             input.value = name;
@@ -1456,19 +1463,38 @@
           regeo(lng, lat).then(r => {
             apply((r && r.ok && r.name) ? r.name : coordName, (r && r.adcode) || '');
           }).catch(() => apply(coordName, ''));
+        };
+
+        const isWV = /;\s*wv\)/i.test(navigator.userAgent);
+        const failHint = () => {
+          done(isWV
+            ? 'App 内置浏览器不支持网页定位：请点「📍 地图选点」，把图钉对准出发位置'
+            : '没能定位：请允许定位后重试，或改用「📍 地图选点」');
+        };
+
+        // ① App（HBuilderX / uni-app）：coordsType 直接要高德坐标系，连转换都省了
+        if (hasPlus) {
+          window.plus.geolocation.getCurrentPosition(
+            pos => {
+              const c = (pos && pos.coords) || {};
+              const lng = Number(c.longitude), lat = Number(c.latitude);
+              if (isFinite(lng) && isFinite(lat) && lng && lat) useCoord(lng, lat);
+              else failHint();
+            },
+            () => failHint(),
+            { provider: 'system', coordsType: 'gcj02', enableHighAccuracy: true, timeout: 10000 }
+          );
+          return;
+        }
+
+        // ② 浏览器：WGS-84 → GCJ-02，不转的话在高德地图上整条路线都会偏
+        navigator.geolocation.getCurrentPosition(pos => {
+          const c = wgs2gcj(pos.coords.longitude, pos.coords.latitude);
+          useCoord(c.lng, c.lat);
         }, err => {
           const code = err && err.code;
-          // APK / WebView 里授权弹窗出不来（要原生层接 onGeolocationPermissions
-          // ShowPrompt 桥），错误码也是 1，和"用户点了拒绝"分不开。
-          // 用 UA 认出安卓 WebView，给一条能落地的指引：地图选点不依赖定位权限。
-          const isWV = /;\s*wv\)/i.test(navigator.userAgent);
-          if (code === 1) {
-            done(isWV
-              ? 'App 内置浏览器不支持网页定位：请点「📍 地图选点」，把图钉对准出发位置'
-              : '浏览器拒绝了定位权限：请允许后重试，或改用「📍 地图选点」');
-          }
-          else if (code === 3) done('定位超时（信号弱）：请重试，或改用「📍 地图选点」');
-          else done('定位失败：请改用「📍 地图选点」或手动输入');
+          if (code === 3) done('定位超时（信号弱）：请重试，或改用「📍 地图选点」');
+          else failHint();
         }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
       });
     }
