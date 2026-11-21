@@ -814,10 +814,16 @@
     // ---- Toast ----
     const toastHost = $('#toastHost');
     function toast(msg, duration = 2400) {
+      // 2026-11-21 修：① 同一句话 1.5 秒内只弹一条（连点按钮会糊满屏）；
+      // ② 屏幕上最多留 3 条，再出新的立刻送走最旧的。长文案（定位报错）
+      //    连弹时曾把整个弹窗盖住，答辩演示很减分。
+      if (toast._lastMsg === msg && Date.now() - toast._lastAt < 1500) return;
+      toast._lastMsg = msg; toast._lastAt = Date.now();
       const item = document.createElement('div');
       item.className = 'toast-item';
       item.textContent = msg;
       toastHost.appendChild(item);
+      while (toastHost.children.length > 3) toastHost.firstElementChild.remove();
       setTimeout(() => {
         item.classList.add('out');
         item.addEventListener('animationend', () => item.remove(), { once: true });
@@ -1452,9 +1458,17 @@
           }).catch(() => apply(coordName, ''));
         }, err => {
           const code = err && err.code;
-          if (code === 1) done('浏览器拒绝了定位权限：请在地址栏允许定位，或改用地图选点');
-          else if (code === 3) done('定位超时（信号弱），请重试或改用地图选点');
-          else done('定位失败，请改用地图选点或手动输入');
+          // APK / WebView 里授权弹窗出不来（要原生层接 onGeolocationPermissions
+          // ShowPrompt 桥），错误码也是 1，和"用户点了拒绝"分不开。
+          // 用 UA 认出安卓 WebView，给一条能落地的指引：地图选点不依赖定位权限。
+          const isWV = /;\s*wv\)/i.test(navigator.userAgent);
+          if (code === 1) {
+            done(isWV
+              ? 'App 内置浏览器不支持网页定位：请点「📍 地图选点」，把图钉对准出发位置'
+              : '浏览器拒绝了定位权限：请允许后重试，或改用「📍 地图选点」');
+          }
+          else if (code === 3) done('定位超时（信号弱）：请重试，或改用「📍 地图选点」');
+          else done('定位失败：请改用「📍 地图选点」或手动输入');
         }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
       });
     }
