@@ -458,11 +458,17 @@
           </div>
           <div class="field">
             <label>本人出发地</label>
-            <!-- 2026-11-16 地图选点：手打地名容易解析偏，点地图拿官方坐标。
+            <!-- 2026-11-21 自动定位：手机上一键拿当前位置，GPS 坐标经 WGS→GCJ 转换
+                 + regeo 逆地理回填（不用加载 200KB 地图 SDK）。
                  布局用行内 style，不动 css/style1.css（陈滢竹的文件）。 -->
             <div style="display:flex;gap:8px;align-items:stretch">
               <input id="fromInput" name="from" type="text" style="flex:1;min-width:0"
                      placeholder="输入小区/地铁站/学校名，从列表里选准位置">
+              <button type="button" id="fromLocateBtn"
+                      title="自动定位到当前位置"
+                      style="flex:none;border:1px solid #cbd8e6;background:#ebf4ff;color:#2b6cb0;
+                             border-radius:10px;padding:0 12px;font-size:13px;font-family:inherit;
+                             cursor:pointer;white-space:nowrap">🎯 定位</button>
               <button type="button" id="fromPickBtn"
                       title="在地图上拖动选点"
                       style="flex:none;border:1px solid #cbd8e6;background:#ebf4ff;color:#2b6cb0;
@@ -647,7 +653,39 @@
         </div>
         <div class="field">
           <label>出发地（选填）</label>
-          <input id="memberFromInput" type="text" maxlength="30" placeholder="输入地名从列表选择，可不填" autocomplete="off">
+          <!-- 2026-11-21 代填成员也能一键定位，与本人出发地同一套逻辑 -->
+          <div style="display:flex;gap:8px;align-items:stretch">
+            <input id="memberFromInput" type="text" maxlength="30" style="flex:1;min-width:0"
+                   placeholder="输入地名从列表选择，可不填" autocomplete="off">
+            <button type="button" id="memberLocateBtn"
+                    title="自动定位到当前位置"
+                    style="flex:none;border:1px solid #cbd8e6;background:#ebf4ff;color:#2b6cb0;
+                           border-radius:10px;padding:0 12px;font-size:13px;font-family:inherit;
+                           cursor:pointer;white-space:nowrap">🎯 定位</button>
+          </div>
+        </div>
+        <!-- 2026-11-21 补齐与本人表单一致的字段：出行方式 / 时间窗口 / 预算。
+             代填场景信息常常不全，所以时间窗口多一个「不限」首项，不填走旧兜底。 -->
+        <div class="field">
+          <label>出行方式 <span class="label-hint">可多选</span></label>
+          <input id="memberPrefHidden" type="hidden" autocomplete="off">
+          <div class="pref-group" id="memberPrefGroup">
+            <button type="button" class="pref-chip" data-pref="transit">地铁 / 公交</button>
+            <button type="button" class="pref-chip" data-pref="taxi">打车</button>
+            <button type="button" class="pref-chip" data-pref="bike">骑行 / 步行</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>可出发时间窗口 <span class="label-hint">不知道可选不限</span></label>
+          <div class="time-range">
+            <select id="memberWinStartSel" aria-label="最早出发时间"></select>
+            <span class="time-sep">至</span>
+            <select id="memberWinEndSel" aria-label="最晚出发时间"></select>
+          </div>
+        </div>
+        <div class="field">
+          <label>个人预算上限（可选）</label>
+          <input id="memberBudgetInput" type="text" placeholder="例如：¥ 200 / 人">
         </div>
         <div class="modal-actions">
           <button type="button" class="btn btn-ghost" data-close="addMemberModal">取消</button>
@@ -1340,8 +1378,90 @@
       input.addEventListener('blur', () => setTimeout(hide, 180));
     }
 
+    /* ── 出发地「自动定位」（2026-11-21）────────────────────────────
+       手机上最顺的填法：点一下拿 GPS 坐标，逆地理出地址直接填进输入框。
+       ① 浏览器 navigator.geolocation 给的是 WGS-84 坐标，高德用 GCJ-02，
+          不转换会偏几百米，所以内置一次转换（公开算法，纯数学，无依赖）。
+       ② 逆地理复用 amap-api.js 的 regeo()；解析不出地址时退回坐标文本，
+          引擎的 _geoResolve 认得 "经度,纬度"，不会卡死流程。
+       ③ 定位结果若不在房间城市，只提醒不拦截（提交时的解析校验仍会把关）。
+       ④ 不加载 200KB 地图 SDK，比地图选点轻；地图选点仍保留作兜底。 */
+    function wgs2gcj(lng, lat) {
+      const a = 6378245.0, ee = 0.00669342162296594323;
+      const tLat = (x, y) => {
+        let r = -100 + 2*x + 3*y + 0.2*y*y + 0.1*x*y + 0.2*Math.sqrt(Math.abs(x));
+        r += (20*Math.sin(6*x*Math.PI) + 20*Math.sin(2*x*Math.PI)) * 2/3;
+        r += (20*Math.sin(y*Math.PI) + 40*Math.sin(y/3*Math.PI)) * 2/3;
+        r += (160*Math.sin(y/12*Math.PI) + 320*Math.sin(y*Math.PI/30)) * 2/3;
+        return r;
+      };
+      const tLng = (x, y) => {
+        let r = 300 + x + 2*y + 0.1*x*x + 0.1*x*y + 0.1*Math.sqrt(Math.abs(x));
+        r += (20*Math.sin(6*x*Math.PI) + 20*Math.sin(2*x*Math.PI)) * 2/3;
+        r += (20*Math.sin(x*Math.PI) + 40*Math.sin(x/3*Math.PI)) * 2/3;
+        r += (150*Math.sin(x/12*Math.PI) + 300*Math.sin(x/30*Math.PI)) * 2/3;
+        return r;
+      };
+      const radLat = lat / 180 * Math.PI;
+      let magic = Math.sin(radLat); magic = 1 - ee * magic * magic;
+      const sq = Math.sqrt(magic);
+      const dLat = (tLat(lng - 105, lat - 35) * 180) / ((a * (1 - ee)) / (magic * sq) * Math.PI);
+      const dLng = (tLng(lng - 105, lat - 35) * 180) / (a / sq * Math.cos(radLat) * Math.PI);
+      return { lng: lng + dLng, lat: lat + dLat };
+    }
+
+    /* 把「定位」按钮接到某个出发地输入框上（本人 + 代填成员共用一套） */
+    function bindLocateBtn(btnId, inputSel, setPicked) {
+      const btn = document.getElementById(btnId);
+      const input = document.querySelector(inputSel);
+      if (!btn || !input) return;
+      const btnText = btn.textContent;
+      btn.addEventListener('click', () => {
+        if (!navigator.geolocation) {
+          toast('当前环境不支持定位（本地文件打开时没有定位权限），请用地图选点或手动输入');
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = '定位中…';
+        const done = (msg) => {
+          btn.disabled = false;
+          btn.textContent = btnText;
+          if (msg) toast(msg);
+        };
+        navigator.geolocation.getCurrentPosition(pos => {
+          // WGS → GCJ：不转的话在高德地图上整条路线都会偏
+          const c = wgs2gcj(pos.coords.longitude, pos.coords.latitude);
+          const lng = Number(c.lng.toFixed(6)), lat = Number(c.lat.toFixed(6));
+          const coordName = lng.toFixed(5) + ',' + lat.toFixed(5);
+          const apply = (name, adcode) => {
+            input.value = name;
+            input.classList.remove('error');
+            setPicked({ lng: lng, lat: lat, name: name });
+            if (typeof seedCoord === 'function') seedCoord(name, lng, lat, adcode || state.cityCode);
+            const myCity = String(adcode || '').slice(0, 4);
+            const roomCity = String(state.cityCode || '').slice(0, 4);
+            if (myCity && roomCity && myCity !== roomCity) {
+              done('定位成功，但当前位置似乎不在' + (state.cityName || '房间城市') + '，请核对');
+            } else {
+              done('已定位：' + (name.length > 16 ? name.slice(0, 16) + '…' : name));
+            }
+          };
+          if (typeof regeo !== 'function') { apply(coordName, ''); return; }
+          regeo(lng, lat).then(r => {
+            apply((r && r.ok && r.name) ? r.name : coordName, (r && r.adcode) || '');
+          }).catch(() => apply(coordName, ''));
+        }, err => {
+          const code = err && err.code;
+          if (code === 1) done('浏览器拒绝了定位权限：请在地址栏允许定位，或改用地图选点');
+          else if (code === 3) done('定位超时（信号弱），请重试或改用地图选点');
+          else done('定位失败，请改用地图选点或手动输入');
+        }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+      });
+    }
+
     let pickedFrom = null;          // 本人出发地的精确坐标（点选才有）
     attachTips($('#fromInput'), t => { pickedFrom = t ? { lng: t.lng, lat: t.lat } : null; }, () => state.cityCode);
+    bindLocateBtn('fromLocateBtn', '#fromInput', p => { pickedFrom = p; });
 
     /* ── 出发地「地图选点」（2026-11-16）────────────────────────────
        手打地名 → 地理编码取第一个匹配，是"出发地坐标不准"的根因；
@@ -1388,6 +1508,7 @@
 
     let pickedMemberFrom = null;    // 发起人代填成员的精确坐标
     attachTips($('#memberFromInput'), t => { pickedMemberFrom = t ? { lng: t.lng, lat: t.lat } : null; }, () => state.cityCode);
+    bindLocateBtn('memberLocateBtn', '#memberFromInput', p => { pickedMemberFrom = p; });
 
     // 目的地也接联想：终点坐标同样决定整条路线，手打一样会偏
     // 选中即 seedCoord 注入本机解析缓存（发起人在本机生成方案，不需要上云）
@@ -1730,11 +1851,72 @@
         .catch(err => toast(err.message || '保存失败，请重试'));
     });
 
-    // 添加成员：弹窗填昵称（必填）+ 出发地（选填）
+    /* ── 添加成员弹窗（2026-11-21 补齐与本人表单一致的字段）──────────
+       原来只有姓名 + 出发地，mode/budget/时间窗全走兜底值；代填的成员
+       在方案里被当成"坐公交、没预算、随时能出发"，和真实情况对不上。
+       现在补：出行方式多选、时间窗口双下拉、预算。代填场景信息常常
+       不全，时间窗口加「不限」首项——两端任一选回不限就整体归空。 */
+    const memberPrefHidden = $('#memberPrefHidden');
+    const memberWinStartSel = $('#memberWinStartSel');
+    const memberWinEndSel = $('#memberWinEndSel');
+    (function fillMemberTimeOptions() {
+      const opts = [];
+      for (let h = 6; h <= 23; h++) {
+        const hh = String(h).padStart(2, '0');
+        opts.push(hh + ':00', hh + ':30');
+      }
+      const html = '<option value="">不限</option>' +
+        opts.map(t => '<option value="' + t + '">' + t + '</option>').join('');
+      memberWinStartSel.innerHTML = html;
+      memberWinEndSel.innerHTML = html;
+    })();
+    function _memberOpts() {
+      return Array.prototype.map.call(memberWinEndSel.options, o => o.value).filter(v => v);
+    }
+    memberWinStartSel.addEventListener('change', () => {
+      const s = memberWinStartSel.value;
+      if (!s) { memberWinEndSel.value = ''; return; }        // 归不限
+      const all = _memberOpts();
+      const e = memberWinEndSel.value;
+      if (!e || e <= s) {
+        const next = all[all.indexOf(s) + 1];
+        if (next) memberWinEndSel.value = next;
+      }
+    });
+    memberWinEndSel.addEventListener('change', () => {
+      const e = memberWinEndSel.value;
+      if (!e) { memberWinStartSel.value = ''; return; }      // 归不限
+      const all = _memberOpts();
+      const s = memberWinStartSel.value;
+      if (!s || e <= s) {
+        const prev = all[all.indexOf(e) - 1];
+        if (prev) memberWinStartSel.value = prev;
+      }
+    });
+    function syncMemberPrefUI() {
+      $$('#memberPrefGroup .pref-chip').forEach(c =>
+        c.classList.toggle('active', memberPrefHidden.value.includes(c.dataset.pref)));
+    }
+    $('#memberPrefGroup').addEventListener('click', e => {
+      const btn = e.target.closest('.pref-chip');
+      if (!btn) return;
+      const arr = memberPrefHidden.value ? memberPrefHidden.value.split(',') : [];
+      const i = arr.indexOf(btn.dataset.pref);
+      if (i >= 0) arr.splice(i, 1); else arr.push(btn.dataset.pref);
+      memberPrefHidden.value = arr.join(',');
+      syncMemberPrefUI();
+    });
+
+    // 添加成员：弹窗字段与本人表单对齐（姓名必填，其余选填）
     $('#addMemberBtn').addEventListener('click', () => {
       $('#memberNameInput').value = '';
       $('#memberFromInput').value = '';
+      $('#memberBudgetInput').value = '';
       pickedMemberFrom = null;               // 上次弹窗选的点不带入这次
+      memberPrefHidden.value = 'transit';    // 与本人表单默认口径一致
+      syncMemberPrefUI();
+      memberWinStartSel.value = '';
+      memberWinEndSel.value = '';
       $('#memberNameInput').classList.remove('error');
       openModal('addMemberModal');
       setTimeout(() => $('#memberNameInput').focus(), 60);
@@ -1744,16 +1926,32 @@
       if (!cloudOk()) return;
       const name = $('#memberNameInput').value.trim();
       const from = $('#memberFromInput').value.trim();
+      const ws = memberWinStartSel.value, we = memberWinEndSel.value;
       if (!name) { $('#memberNameInput').classList.add('error'); toast('请填写成员昵称'); return; }
+
+      // 选了时间窗才校验倒挂；没选（不限）走原兜底 null，引擎按"随时能出发"算
+      if (ws && we && we <= ws) {
+        memberWinStartSel.classList.add('error');
+        toast('结束时间要晚于开始时间');
+        return;
+      }
+      memberWinStartSel.classList.remove('error');
 
       const btn = $('#addMemberForm').querySelector('button[type="submit"]');
       btn.disabled = true;
       // 代填：给一个临时令牌，否则会覆盖发起人自己那一行
       const proxyToken = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      const modes = memberPrefHidden.value
+        ? memberPrefHidden.value.split(',').filter(Boolean)
+        : ['transit'];
+      const budgetNum = parseFloat(String($('#memberBudgetInput').value.trim()).replace(/[^\d.]/g, '')) || 0;
       Cloud.joinRoom(state.inviteCode, {
         name: name, origin: from,
         originCoord: pickedMemberFrom,
-        mode: 'transit', budget: 0, winStart: null, winEnd: null
+        mode: modes.join(','),
+        budget: budgetNum,
+        winStart: (ws && we) ? ws : null,
+        winEnd: (ws && we) ? we : null
       }, proxyToken).then(() => syncRoom(state.inviteCode))
         .then(() => {
           closeModal('addMemberModal');

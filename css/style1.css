@@ -1374,3 +1374,12 @@ button, input, select, textarea { font-family: inherit; }
 @media (max-width: 420px) {
   .weight-inputs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* 【2026-11-21】添加成员弹窗补齐字段（出行方式/时间窗口/预算）后内容变长，
+ * 小屏（iPhone SE 667px 高）会被视口裁掉底部按钮，限高 + 内部滚动保命；
+ * 其他弹窗内容短，不受影响 */
+.modal {
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
