@@ -20,6 +20,60 @@ APK 是 WebView 壳。网页的定位要弹授权框，必须由 **APK 的安卓
 
 ### A. HBuilderX / uni-app 打包 ★已确认是这条（11/21）
 
+**先分清你建的是哪种项目**（HBuilderX 里看项目目录）：
+- 目录里有 **`pages.json`** → 是 **uni-app** 项目 → 走 **A1**
+- 只有 `manifest.json`、没有 `pages.json` → 是 **5+App / Wap2App** 项目 → 走 **A2**
+
+#### A1. uni-app 项目（web-view 加载网址）—— 网页已支持，需加约 15 行代码
+
+这种结构里 `plus` **不会**注入到网页里（11/21 新打的包验证过），所以网页已改为
+用官方通信桥（`js/uni-webview.js`，已随页面自动加载）：网页发消息给 App 侧，
+**App 侧代定位后把坐标送回网页**。
+
+在加载网页的那个页面的 `.vue` 文件里（比如 `pages/index/index.vue`）改成：
+
+```vue
+<template>
+  <view style="flex:1">
+    <web-view src="https://zhy-246-bd.github.io/jiebanxing/" @message="onWebMsg"></web-view>
+  </view>
+</template>
+
+<script>
+export default {
+  methods: {
+    onWebMsg(e) {
+      const d = e.detail.data && e.detail.data[e.detail.data.length - 1];
+      if (!d || d.type !== 'jbx_getLocation') return;   // 只处理定位请求
+      uni.getLocation({
+        success: (res) => {
+          // #ifdef APP-PLUS
+          const wv = this.$scope.$getAppWebview().children()[0];
+          wv.evalJS('window.__jbxFromAppLocation(' + res.longitude + ',' + res.latitude + ')');
+          // #endif
+        },
+        fail: () => {
+          // #ifdef APP-PLUS
+          const wv = this.$scope.$getAppWebview().children()[0];
+          wv.evalJS('window.__jbxFromAppLocation(null)');
+          // #endif
+        }
+      });
+    }
+  }
+}
+</script>
+```
+
+同时 `manifest.json` 依然要：勾 **Geolocation（定位）** 模块 + 两个定位权限
+（`ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION`）——`uni.getLocation`
+底层靠它。然后重新云打包。
+
+网页端会自动把 App 返回的 wgs84 坐标转成高德 gcj02，不用管坐标系。
+网页侧收到结果或 12 秒无响应都有对应提示。
+
+#### A2. 5+App / Wap2App 项目（直接填网址打包）
+
 网页端**已经兼容**：页面里检测到 App 注入的 `plus` 对象后，会自动改用它自带的
 定位 API（`plus.geolocation`），不经过浏览器授权框，`coordsType` 直接指定
 `gcj02`（高德坐标系），省掉一次坐标转换。
@@ -34,8 +88,6 @@ APK 是 WebView 壳。网页的定位要弹授权框，必须由 **APK 的安卓
 
 > ⚠️ 注意：`plus` 只在真机 App 里注入。用 HBuilderX「运行到浏览器」测不出
 > 定位效果，必须真机运行或装新 APK 验证。
-
-验收：新 APK 里点「定位」→ 系统弹「是否允许获取位置」→ 允许 → 地址自动填好。
 
 如果漏勾了模块，页面会明确提示「App 未开启定位模块（打包配置缺 Geolocation
 权限）」，不会让人误以为是网络问题。
