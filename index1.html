@@ -1481,7 +1481,17 @@
               if (isFinite(lng) && isFinite(lat) && lng && lat) useCoord(lng, lat);
               else failHint();
             },
-            () => failHint(),
+            err => {
+              // 最常见：manifest 里没勾 Geolocation 模块 / 没给定位权限。
+              // 这种情况网页端无能为力，但要把原因说出来，别让人以为是网络问题。
+              const txt = String((err && (err.message || err.code)) || "");
+              console.warn("[结伴行] plus.geolocation 失败：", err);
+              if (/module|permission|undefined|not\s*found/i.test(txt)) {
+                done('App 未开启定位模块（打包配置缺 Geolocation 权限）：请先用「📍 地图选点」');
+              } else {
+                failHint();
+              }
+            },
             { provider: 'system', coordsType: 'gcj02', enableHighAccuracy: true, timeout: 10000 }
           );
           return;

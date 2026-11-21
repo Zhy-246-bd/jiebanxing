@@ -18,19 +18,27 @@ APK 是 WebView 壳。网页的定位要弹授权框，必须由 **APK 的安卓
 
 ## 三、按打包方式选修法
 
-### A. HBuilderX / uni-app 打包（可能性最大）
+### A. HBuilderX / uni-app 打包 ★已确认是这条（11/21）
 
 网页端**已经兼容**：页面里检测到 App 注入的 `plus` 对象后，会自动改用它自带的
-定位 API（`plus.geolocation`），不经过浏览器授权框。
+定位 API（`plus.geolocation`），不经过浏览器授权框，`coordsType` 直接指定
+`gcj02`（高德坐标系），省掉一次坐标转换。
 
-你只需要确认两件事，然后**重新打包发一版**：
+你只需要确认三件事，然后**重新打包发一版**：
 
 1. `manifest.json` → App 模块配置 → 勾选 **Geolocation（定位）** 模块
-2. `manifest.json` → App 权限配置（Android）→ 勾选
-   - `android.permission.ACCESS_FINE_LOCATION`（精确位置）
-   - `android.permission.ACCESS_COARSE_LOCATION`（粗略位置）
+2. `manifest.json` → App 权限配置 → Android → 勾选
+   - `ACCESS_FINE_LOCATION`（精确位置）
+   - `ACCESS_COARSE_LOCATION`（粗略位置）
+3. 发行 → 原生 App-云打包（或本地打包），**重新出一版 APK**
+
+> ⚠️ 注意：`plus` 只在真机 App 里注入。用 HBuilderX「运行到浏览器」测不出
+> 定位效果，必须真机运行或装新 APK 验证。
 
 验收：新 APK 里点「定位」→ 系统弹「是否允许获取位置」→ 允许 → 地址自动填好。
+
+如果漏勾了模块，页面会明确提示「App 未开启定位模块（打包配置缺 Geolocation
+权限）」，不会让人误以为是网络问题。
 
 ### B. 原生 WebView 自定义壳（自己写的 Android 项目）
 
