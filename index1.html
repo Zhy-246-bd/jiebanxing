@@ -367,7 +367,7 @@
             </div>
           </div>
           <div class="field">
-            <label>出行时间</label>
+            <label>集合时间</label>
             <input id="dateInput" name="date" type="datetime-local">
           </div>
           <div class="field">
@@ -551,7 +551,7 @@
         </div>
         <div id="roomBrief">
           <div class="field" style="margin-bottom:6px;"><label>目的地</label><div class="room-row" id="roomDest">杭州西湖 · 绍兴古城</div></div>
-          <div class="field" style="margin-bottom:6px;"><label>出行时间</label><div class="room-row" id="roomDate">2026-11-22  周六 09:30</div></div>
+          <div class="field" style="margin-bottom:6px;"><label>集合时间</label><div class="room-row" id="roomDate">2026-11-22  周六 09:30</div></div>
           <div class="field"><label>备注</label><div class="room-row" id="roomRemark">——</div></div>
         </div>
         <!-- 发起人专用编辑表单（普通成员视角完全不可见） -->
@@ -567,7 +567,7 @@
                              cursor:pointer;white-space:nowrap">📍 地图选点</button>
             </div>
           </div>
-          <div class="field"><label>出行时间 *</label><input id="editDate" type="datetime-local"></div>
+          <div class="field"><label>集合时间 *</label><input id="editDate" type="datetime-local"></div>
           <div class="field"><label>备注（选填）</label><input id="editRemark" type="text" maxlength="60" placeholder="如：轻装出行，自带防晒"></div>
           <div class="modal-actions">
             <button type="button" class="btn btn-ghost" id="roomEditCancel">取消</button>
@@ -1097,7 +1097,7 @@
       $('#destInput').classList.remove('error');
       $('#dateInput').classList.remove('error');
       if (!dest) { $('#destInput').classList.add('error'); ok = false; toast('请填写目的地'); }
-      if (!dateRaw) { $('#dateInput').classList.add('error'); ok = false; toast('请选择出行时间'); }
+      if (!dateRaw) { $('#dateInput').classList.add('error'); ok = false; toast('请选择集合时间'); }
       if (!cityKey) { ok = false; toast('请选择出行城市'); }
       if (!ok) return;
 
@@ -2193,7 +2193,7 @@
       const dest = $('#editDest').value.trim();
       const dateRaw = $('#editDate').value;
       if (!dest) { $('#editDest').classList.add('error'); toast('请填写目的地'); return; }
-      if (!dateRaw) { $('#editDate').classList.add('error'); toast('请填写出行时间'); return; }
+      if (!dateRaw) { $('#editDate').classList.add('error'); toast('请填写集合时间'); return; }
 
       // 目的地重新选过点就更新精确坐标，否则沿用文本解析
       if (pickedDest && typeof seedCoord === 'function') {
@@ -2544,7 +2544,7 @@
           : '顺路成员先两两拼车，中途汇合后前往目的地';
       $('#planOverview').innerHTML = `
         <div class="plan-row"><span>目的地</span><b>${state.dest || '——'}</b></div>
-        <div class="plan-row"><span>出行时间</span><b>${state.date || '——'}</b></div>
+        <div class="plan-row"><span>集合时间</span><b>${state.date || '——'}</b></div>
         <div class="plan-row"><span>备注</span><b>${state.remark || '——'}</b></div>
         <div class="plan-row"><span>汇合方式</span><b>${PLAN_NAMES[state.selectedPlan] || '未选择'}</b></div>
         <div class="plan-row"><span>成员情况</span><b>共 ${state.members.length} 人，${filledN} 人已填写信息</b></div>
@@ -2725,10 +2725,10 @@
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡。2026-11-22 起可点：连点查看环境诊断（UA/壳标记/plus），
        远程排障"她打包了没有"用。 -->
-  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1122f</div>
+  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1122g</div>
   <script>
   document.getElementById('verBadge').addEventListener('click', function () {
-    alert('结伴行环境诊断\n─────────────\n版本: v1122f\n壳标记 __jbxShellBridge: '
+    alert('结伴行环境诊断\n─────────────\n版本: v1122g\n壳标记 __jbxShellBridge: '
       + (window.__jbxShellBridge === 1 ? '有（App 已接定位桥）' : '无（旧壳或标记未注入）')
       + '\nplus 对象: ' + (window.plus ? '有' : '无')
       + '\nUA 含 uni-app: ' + (/uni-app/i.test(navigator.userAgent) ? '是' : '否')
@@ -2743,7 +2743,7 @@
      页面启动后向服务器要一次小文件（强制走网络），发现不一致就带 ?v= 重新进页面，
      ?v= 让 WebView 的缓存键变化，于是必然拿到新页面。 */
   (function () {
-    var JBX_BUILD = '1122f';
+    var JBX_BUILD = '1122g';
     try {
       if (!window.fetch) return;
       fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
