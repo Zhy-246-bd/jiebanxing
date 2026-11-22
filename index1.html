@@ -462,8 +462,10 @@
                  + regeo 逆地理回填（不用加载 200KB 地图 SDK）。
                  布局用行内 style，不动 css/style1.css（陈滢竹的文件）。 -->
             <div style="display:flex;gap:8px;align-items:stretch">
-              <input id="fromInput" name="from" type="text" style="flex:1;min-width:0"
-                     placeholder="输入小区/地铁站/学校名，从列表里选准位置">
+              <textarea id="fromInput" name="from" rows="1"
+                     placeholder="输入小区/地铁站/学校名，从列表里选准位置"
+                     style="flex:1;min-width:0;height:46px;min-height:46px;max-height:66px;
+                            resize:none;overflow:hidden;line-height:20px;padding:0 12px"></textarea>
               <button type="button" id="fromClearBtn"
                       title="一键清空，重新填写"
                       style="flex:none;border:1px solid #cbd8e6;background:#f5f8fc;color:#5a6a7a;
@@ -660,8 +662,10 @@
           <label>出发地（选填）</label>
           <!-- 2026-11-21 代填成员也能一键定位，与本人出发地同一套逻辑 -->
           <div style="display:flex;gap:8px;align-items:stretch">
-            <input id="memberFromInput" type="text" maxlength="60" style="flex:1;min-width:0"
-                   placeholder="输入地名从列表选择，可不填" autocomplete="off">
+            <textarea id="memberFromInput" rows="1" maxlength="60"
+                   placeholder="输入地名从列表选择，可不填" autocomplete="off"
+                   style="flex:1;min-width:0;height:46px;min-height:46px;max-height:66px;
+                          resize:none;overflow:hidden;line-height:20px;padding:0 12px"></textarea>
             <button type="button" id="memberClearBtn"
                     title="一键清空，重新填写"
                     style="flex:none;border:1px solid #cbd8e6;background:#f5f8fc;color:#5a6a7a;
@@ -1340,7 +1344,7 @@
         const st = document.createElement('style');
         st.id = 'jbx-tips-style';
         st.textContent =
-          '.jbx-tips-wrap{position:relative}' +
+          '.jbx-tips-wrap{position:relative;flex:1 1 auto;min-width:0;width:100%}' +
           '.jbx-tips{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);z-index:40;max-height:220px;overflow:auto}' +
           '.jbx-tips button{display:block;width:100%;text-align:left;padding:10px 12px;background:none;border:0;font-size:14px;color:#2d3748;cursor:pointer}' +
           '.jbx-tips button:hover,.jbx-tips button:focus{background:#f0f4f8;outline:none}' +
@@ -1431,14 +1435,14 @@
       return { lng: lng + dLng, lat: lat + dLat };
     }
 
-    /* 定位回填的地址常带「湖北省武汉市…」长前缀，输入框显示不全、改字也难。
-       显示时去掉省前缀，还长就去掉市前缀，只留区级起的短地址；
-       坐标本身是精确的，engine 解析时 seedCoord 缓存按短名命中，不受影响。 */
-    function shortAddr(name) {
-      let s = String(name || '');
-      s = s.replace(/^([^省]{1,8}省)/, '');
-      if (s.length > 16) s = s.replace(/^([^市]{1,8}市)/, '');
-      return s;
+    /* 定位回填的是完整逆地理地址（可能 20~30 字），出发地框已改成
+       自动长高的 textarea（1~2 行），全地址可见、也能在中间改字；
+       这里只在程序化赋值后触发一次自适应高度。 */
+    function fitAddrBox(inp) {
+      try {
+        const f = (window.__jbxAddrFit || new Map()).get(inp);
+        if (f) f();
+      } catch (e) {}
     }
 
     /* 高德 H5「网络粗定位」（2026-11-22，第六条通道）：
@@ -1526,8 +1530,9 @@
           const lng = Number(lng0.toFixed(6)), lat = Number(lat0.toFixed(6));
           const coordName = lng.toFixed(5) + ',' + lat.toFixed(5);
           const apply = (name, adcode) => {
-            const show = shortAddr(name) || name || coordName;
+            const show = name || coordName;
             input.value = show;
+            fitAddrBox(input);
             input.classList.remove('error');
             setPicked({ lng: lng, lat: lat, name: show });
             if (typeof seedCoord === 'function') seedCoord(show, lng, lat, adcode || state.cityCode);
@@ -1733,7 +1738,29 @@
     attachTips($('#fromInput'), t => { pickedFrom = t ? { lng: t.lng, lat: t.lat } : null; }, () => state.cityCode);
     bindLocateBtn('fromLocateBtn', '#fromInput', p => { pickedFrom = p; });
 
-    /* 出发地一键清空（2026-11-22 v1122b）：定位回填的地址长，
+    /* 出发地框已改为自动长高的 textarea（2026-11-22 v1122c）：
+       地址回填后 1 行放不下就长到 2 行，全地址可见、中间也能改字。
+       回车不换行（地址里没有换行的意义）。 */
+    function bindAddrBox(sel) {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      const fit = () => {
+        try {
+          el.style.height = '20px';
+          const need = Math.max(el.scrollHeight, 46);
+          el.style.height = Math.min(need, 66) + 'px';
+        } catch (e) {}
+      };
+      el.addEventListener('input', fit);
+      el.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); });
+      try {
+        (window.__jbxAddrFit = window.__jbxAddrFit || new Map()).set(el, fit);
+      } catch (e) {}
+      fit();
+    }
+    bindAddrBox('#fromInput');
+
+    /* 出发地一键清空（2026-11-22）：定位回填的地址长，
        手机上想在中间改几个字很费劲，不如 ✕ 一下重填/重选 */
     function bindClearBtn(btnId, inputSel, onClear) {
       const b = document.getElementById(btnId);
@@ -1741,6 +1768,7 @@
       if (!b || !inp) return;
       b.addEventListener('click', () => {
         inp.value = '';
+        fitAddrBox(inp);
         inp.classList.remove('error');
         if (typeof onClear === 'function') onClear();
         inp.focus();
@@ -1772,6 +1800,7 @@
           lnglat: pickedFrom ? [pickedFrom.lng, pickedFrom.lat] : undefined,
           onPick: function (r) {
             $('#fromInput').value = r.name;
+            fitAddrBox($('#fromInput'));
             $('#fromInput').classList.remove('error');
             pickedFrom = { lng: r.lng, lat: r.lat, name: r.name };
             if (typeof seedCoord === 'function') {
@@ -1795,6 +1824,7 @@
     let pickedMemberFrom = null;    // 发起人代填成员的精确坐标
     attachTips($('#memberFromInput'), t => { pickedMemberFrom = t ? { lng: t.lng, lat: t.lat } : null; }, () => state.cityCode);
     bindLocateBtn('memberLocateBtn', '#memberFromInput', p => { pickedMemberFrom = p; });
+    bindAddrBox('#memberFromInput');
     bindClearBtn('memberClearBtn', '#memberFromInput', () => { pickedMemberFrom = null; });
 
     // 目的地也接联想：终点坐标同样决定整条路线，手打一样会偏
@@ -2641,10 +2671,10 @@
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡。2026-11-22 起可点：连点查看环境诊断（UA/壳标记/plus），
        远程排障"她打包了没有"用。 -->
-  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1122b</div>
+  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1122c</div>
   <script>
   document.getElementById('verBadge').addEventListener('click', function () {
-    alert('结伴行环境诊断\n─────────────\n版本: v1122b\n壳标记 __jbxShellBridge: '
+    alert('结伴行环境诊断\n─────────────\n版本: v1122c\n壳标记 __jbxShellBridge: '
       + (window.__jbxShellBridge === 1 ? '有（App 已接定位桥）' : '无（旧壳或标记未注入）')
       + '\nplus 对象: ' + (window.plus ? '有' : '无')
       + '\nUA 含 uni-app: ' + (/uni-app/i.test(navigator.userAgent) ? '是' : '否')
@@ -2659,7 +2689,7 @@
      页面启动后向服务器要一次小文件（强制走网络），发现不一致就带 ?v= 重新进页面，
      ?v= 让 WebView 的缓存键变化，于是必然拿到新页面。 */
   (function () {
-    var JBX_BUILD = '1122b';
+    var JBX_BUILD = '1122c';
     try {
       if (!window.fetch) return;
       fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
