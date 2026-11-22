@@ -48,6 +48,8 @@ jobs:
           touch site/.nojekyll
           # 用通配符而不是写死文件名：以后加/删临时验证页都不会让构建失败
           cp -r *.html css js site/
+          # version.json：页面"版本自愈"脚本要拉的发版号，拉不到就跳过不影响部署
+          cp -f version.json site/ 2>/dev/null || true
           rm -f site/js/test-*.js
           echo "--- site 内容 ---"
           find site -type f | sort
