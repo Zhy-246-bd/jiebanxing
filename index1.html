@@ -356,7 +356,15 @@
           </div>
           <div class="field">
             <label>目的地</label>
-            <input id="destInput" name="dest" type="text" placeholder="例如：杭州西湖 · 绍兴古城">
+            <!-- 2026-11-22 v1122f：目的地也支持地图选点，与出发地同一套选点组件 -->
+            <div style="display:flex;gap:8px;align-items:stretch">
+              <input id="destInput" name="dest" type="text" placeholder="例如：杭州西湖 · 绍兴古城" style="flex:1;min-width:0">
+              <button type="button" id="destPickBtn"
+                      title="在地图上拖动选点"
+                      style="flex:none;border:1px solid #cbd8e6;background:#ebf4ff;color:#2b6cb0;
+                             border-radius:10px;padding:0 12px;font-size:13px;font-family:inherit;
+                             cursor:pointer;white-space:nowrap">📍 地图选点</button>
+            </div>
           </div>
           <div class="field">
             <label>出行时间</label>
@@ -548,7 +556,17 @@
         </div>
         <!-- 发起人专用编辑表单（普通成员视角完全不可见） -->
         <form id="roomEditForm" hidden novalidate>
-          <div class="field"><label>目的地 *</label><input id="editDest" type="text" maxlength="30" autocomplete="off"></div>
+          <div class="field"><label>目的地 *</label>
+            <!-- 2026-11-22 v1122f：改目的地同样可地图选点 -->
+            <div style="display:flex;gap:8px;align-items:stretch">
+              <input id="editDest" type="text" maxlength="30" autocomplete="off" style="flex:1;min-width:0">
+              <button type="button" id="editDestPickBtn"
+                      title="在地图上拖动选点"
+                      style="flex:none;border:1px solid #cbd8e6;background:#ebf4ff;color:#2b6cb0;
+                             border-radius:10px;padding:0 12px;font-size:13px;font-family:inherit;
+                             cursor:pointer;white-space:nowrap">📍 地图选点</button>
+            </div>
+          </div>
           <div class="field"><label>出行时间 *</label><input id="editDate" type="datetime-local"></div>
           <div class="field"><label>备注（选填）</label><input id="editRemark" type="text" maxlength="60" placeholder="如：轻装出行，自带防晒"></div>
           <div class="modal-actions">
@@ -1836,6 +1854,39 @@
     attachTips($('#destInput'), t => { pickedDest = t ? { lng: t.lng, lat: t.lat, adcode: t.adcode } : null; }, () => state.cityCode);
     attachTips($('#editDest'), t => { pickedDest = t ? { lng: t.lng, lat: t.lat, adcode: t.adcode } : null; });
 
+    /* 目的地地图选点（v1122f）：发起表单 + 房主改目的地编辑表单共用一套。
+       选完回填地名 + pickedDest 写精确坐标（提交/保存时随房间上云），
+       与联想选点口径一致；手打改字由 attachTips 的 input 监听清坐标。 */
+    (function bindDestPickers() {
+      [
+        { btn: 'destPickBtn', input: '#destInput' },
+        { btn: 'editDestPickBtn', input: '#editDest' }
+      ].forEach(function (t) {
+        const btn = document.getElementById(t.btn);
+        const inp = document.querySelector(t.input);
+        if (!btn || !inp) return;
+        btn.addEventListener('click', function () {
+          if (typeof JBXMapPicker === 'undefined') {
+            toast('地图选点组件未加载，请手动输入目的地');
+            return;
+          }
+          const city = (typeof currentCity === 'function') ? currentCity() : null;
+          const center = (city && city.center) ? city.center.split(',').map(Number) : null;
+          JBXMapPicker.open({
+            city: (city && city.name) || state.cityName || '',
+            center: (center && isFinite(center[0]) && isFinite(center[1])) ? center : undefined,
+            lnglat: pickedDest ? [pickedDest.lng, pickedDest.lat] : undefined,
+            onPick: function (r) {
+              inp.value = r.name;
+              inp.classList.remove('error');
+              pickedDest = { lng: r.lng, lat: r.lat, adcode: r.adcode };
+              toast('已选中：' + (r.name.length > 16 ? r.name.slice(0, 16) + '…' : r.name));
+            }
+          });
+        });
+      });
+    })();
+
     const personForm = $('#personForm');
     personForm.addEventListener('submit', e => {
       e.preventDefault();
@@ -2674,10 +2725,10 @@
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡。2026-11-22 起可点：连点查看环境诊断（UA/壳标记/plus），
        远程排障"她打包了没有"用。 -->
-  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1122e</div>
+  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1122f</div>
   <script>
   document.getElementById('verBadge').addEventListener('click', function () {
-    alert('结伴行环境诊断\n─────────────\n版本: v1122e\n壳标记 __jbxShellBridge: '
+    alert('结伴行环境诊断\n─────────────\n版本: v1122f\n壳标记 __jbxShellBridge: '
       + (window.__jbxShellBridge === 1 ? '有（App 已接定位桥）' : '无（旧壳或标记未注入）')
       + '\nplus 对象: ' + (window.plus ? '有' : '无')
       + '\nUA 含 uni-app: ' + (/uni-app/i.test(navigator.userAgent) ? '是' : '否')
@@ -2692,7 +2743,7 @@
      页面启动后向服务器要一次小文件（强制走网络），发现不一致就带 ?v= 重新进页面，
      ?v= 让 WebView 的缓存键变化，于是必然拿到新页面。 */
   (function () {
-    var JBX_BUILD = '1122e';
+    var JBX_BUILD = '1122f';
     try {
       if (!window.fetch) return;
       fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
