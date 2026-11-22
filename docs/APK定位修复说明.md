@@ -1,7 +1,8 @@
 # APK 内「自动定位」不可用 —— 修复说明
 
-> 给雷馨怡：网页端已做兼容（2026-11-21，提交见仓库），下面按你的打包方式选一条走。
-> 交付日 11/23，不着急，先在群里回一句"APK 是用什么工具打的"即可。
+> 给雷馨怡：项目结构已确认是 **5+App 直接加载网址**（11/22，不是 uni-app）。
+> 网页端已配合改好，你只需要给壳的 index.html 加一段拦截代码 + 重新云打包。
+> 直接看 **A2**（含完整代码，复制即可）。
 
 ## 一、现象
 
@@ -18,7 +19,8 @@ APK 是 WebView 壳。网页的定位要弹授权框，必须由 **APK 的安卓
 
 ## 三、按打包方式选修法
 
-### A. HBuilderX / uni-app 打包 ★已确认是这条（11/21）
+### A. HBuilderX 打包 ★实锤走 A2（11/22：目录里只有 index.html + manifest.json，
+### 且壳用 plus.webview.create(APP_URL) 加载远程网址，没有 pages.json/App.vue）
 
 **先分清你建的是哪种项目**（HBuilderX 里看项目目录）：
 - 目录里有 **`pages.json`** → 是 **uni-app** 项目 → 走 **A1**
@@ -72,25 +74,62 @@ export default {
 网页端会自动把 App 返回的 wgs84 坐标转成高德 gcj02，不用管坐标系。
 网页侧收到结果或 12 秒无响应都有对应提示。
 
-#### A2. 5+App / Wap2App 项目（直接填网址打包）
+#### A2. 5+App 项目（★实锤就是这条，11/22）
 
-网页端**已经兼容**：页面里检测到 App 注入的 `plus` 对象后，会自动改用它自带的
-定位 API（`plus.geolocation`），不经过浏览器授权框，`coordsType` 直接指定
-`gcj02`（高德坐标系），省掉一次坐标转换。
+**为什么之前重打包也不行**：5+App 里网页是**远程 WebView**，出于安全
+`plus` 对象**默认不注入远程页面**——所以网页里检测不到 plus，勾了模块也没用；
+而远程 WebView 里浏览器标准的 `navigator.geolocation` 又因为运行时授权弹窗
+从未触发（Android 6+ 必须用户当场点"允许"）而失败。两头堵死了。
 
-你只需要确认三件事，然后**重新打包发一版**：
+**正解：壳代定位**。壳的 index.html 自己是有 plus 的，它来干活：
 
-1. `manifest.json` → App 模块配置 → 勾选 **Geolocation（定位）** 模块
-2. `manifest.json` → App 权限配置 → Android → 勾选
-   - `ACCESS_FINE_LOCATION`（精确位置）
-   - `ACCESS_COARSE_LOCATION`（粗略位置）
-3. 发行 → 原生 App-云打包（或本地打包），**重新出一版 APK**
+1. 网页点「定位」→ 跳自定义协议 `jbxaction://locate`（网页端已加好，2026-11-22 版）
+2. 壳用 `overrideUrlLoading` 拦截这个协议 → 壳调 `plus.geolocation`（能触发系统授权弹窗）
+3. 壳 `evalJS` 把坐标送回网页 → 网页自动填入出发地并转成高德坐标系
 
-> ⚠️ 注意：`plus` 只在真机 App 里注入。用 HBuilderX「运行到浏览器」测不出
-> 定位效果，必须真机运行或装新 APK 验证。
+**给壳的 index.html 加这段**（在 `plus.webview.create(APP_URL, "remote", ...)`
+创建出 ws 变量之后、`append`/显示之前插入；替换掉原来的定位相关调用）：
 
-如果漏勾了模块，页面会明确提示「App 未开启定位模块（打包配置缺 Geolocation
-权限）」，不会让人误以为是网络问题。
+```js
+// ===== 结伴行定位拦截（2026-11-22）=====
+// 拦截网页发来的定位请求：网页会跳 jbxaction://locate
+ws.overrideUrlLoading({ mode: 'reject', match: 'jbxaction://locate' }, function () {
+  // Android 6+ 必须运行时申请定位权限，才会弹系统授权框
+  function doLocate() {
+    plus.geolocation.getCurrentPosition(
+      function (pos) {
+        var c = (pos && pos.coords) || {};
+        // 约定回传 wgs84 坐标，网页端自己转高德 gcj02，不用管坐标系
+        ws.evalJS('window.__jbxFromAppLocation(' + c.longitude + ',' + c.latitude + ')');
+      },
+      function () {
+        ws.evalJS('window.__jbxFromAppLocation(null)');
+      },
+      { provider: 'system', coordsType: 'wgs84', enableHighAccuracy: true }
+    );
+  }
+  if (plus.os.name === 'Android' && plus.android.requestPermissions) {
+    plus.android.requestPermissions(
+      ['android.permission.ACCESS_FINE_LOCATION',
+       'android.permission.ACCESS_COARSE_LOCATION'],
+      function () { doLocate(); },
+      function () { doLocate(); }
+    );
+  } else { doLocate(); }
+});
+// ======================================
+```
+
+**同时确认 manifest.json**（应该已勾过）：
+- App 模块配置 → **Geolocation（定位）** 模块
+- App 权限配置 → Android → `ACCESS_FINE_LOCATION` + `ACCESS_COARSE_LOCATION`
+
+然后 **发行 → 原生 App-云打包** 出一版新 APK。
+
+> ⚠️ 注意：壳的改动只在真机 App 里生效，HBuilderX「运行到浏览器」测不出，
+> 必须真机运行或装新 APK 验证。网页端会自动把 App 回传的 wgs84 坐标转成
+> 高德 gcj02；壳没接拦截代码时，网页会在 6 秒后自动降级试浏览器定位，
+> 仍失败则引导「地图选点」，不会卡死。
 
 ### B. 原生 WebView 自定义壳（自己写的 Android 项目）
 

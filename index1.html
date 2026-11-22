@@ -1428,12 +1428,14 @@
       if (!btn || !input) return;
       const btnText = btn.textContent;
       btn.addEventListener('click', () => {
-        // 定位通道，按可靠性排（2026-11-21 增至四条）：
-        //   ① 5+ App 打包的 APK 注入 plus 对象 → plus.geolocation 直取 gcj02；
-        //   ② uni-app + web-view 打包（plus 不注入网页）→ uni-webview 桥
-        //      发消息给 App 侧代定位，结果经 __jbxFromAppLocation 送回；
-        //   ③ 普通浏览器 → navigator.geolocation（WGS→GCJ 转换）；
-        //   ④ 都不行 → 引导地图选点（不依赖任何定位权限）。
+        // 定位通道，按可靠性排（2026-11-22 增至五条）：
+        //   ① App 直接注入 plus 对象 → plus.geolocation 直取 gcj02；
+        //   ② 5+App 远程 WebView（UA 带 Html5Plus/HBuilder 标记但 plus 默认
+        //      不注入远程页面）→ 跳自定义协议 jbxaction://locate，壳的
+        //      overrideUrlLoading 拦截后代定位，evalJS 送回坐标；
+        //   ③ uni-app + web-view → uni-webview 桥发消息给 App 侧代定位；
+        //   ④ 普通浏览器 → navigator.geolocation（WGS→GCJ 转换）；
+        //   ⑤ 都不行 → 引导地图选点（不依赖任何定位权限）。
         const hasPlus = !!(window.plus && window.plus.geolocation &&
                            typeof window.plus.geolocation.getCurrentPosition === 'function');
         if (!hasPlus && !navigator.geolocation) {
@@ -1478,6 +1480,18 @@
             : '没能定位：请允许定位后重试，或改用「📍 地图选点」');
         };
 
+        // 浏览器定位（④ 通道；②′ 5+App 壳无响应时也降级到这里再试一次）
+        const tryBrowserGPS = () => {
+          navigator.geolocation.getCurrentPosition(pos => {
+            const c = wgs2gcj(pos.coords.longitude, pos.coords.latitude);
+            useCoord(c.lng, c.lat);
+          }, err => {
+            const code = err && err.code;
+            if (code === 3) done('定位超时（信号弱）：请重试，或改用「📍 地图选点」');
+            else failHint();
+          }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+        };
+
         // ① App（HBuilderX / uni-app）：coordsType 直接要高德坐标系，连转换都省了
         if (hasPlus) {
           window.plus.geolocation.getCurrentPosition(
@@ -1503,10 +1517,39 @@
           return;
         }
 
-        // ② uni-app + web-view 打包：plus 不注入网页，用官方通信桥把定位请求
+        // ②′ 5+App 远程 WebView（2026-11-22）：雷馨怡的壳是
+        //     plus.webview.create(APP_URL) 加载远程网址——出于安全，plus 对象
+        //     默认不注入远程页面，但 UA 里会带 Html5Plus/HBuilder 标记。
+        //     这种环境里 navigator.geolocation 拿不到运行时授权弹不出，
+        //     正解是跳自定义协议让壳拦截（overrideUrlLoading）：壳调
+        //     plus.geolocation（能触发系统授权弹窗）后 evalJS 送回坐标。
+        //     先排除 uni-app UA（uni-app webview 的 UA 可能同时含 Html5Plus）。
+        const isPlusShell = /Html5Plus|HBuilder/i.test(navigator.userAgent) &&
+                            !/uni-app/i.test(navigator.userAgent);
+        if (isPlusShell) {
+          const t = { input: input, setPicked: setPicked, done: done, fill: useCoord };
+          window.__jbxAppLocTarget = t;
+          const tok = (window.__jbxLocTok = (window.__jbxLocTok || 0) + 1);
+          setTimeout(() => {
+            if (window.__jbxLocTok === tok && window.__jbxAppLocTarget === t) {
+              window.__jbxAppLocTarget = null;
+              // 壳没接拦截代码或没响应 → 不在这里堵死，降级试浏览器定位
+              tryBrowserGPS();
+            }
+          }, 6000);
+          // 自定义协议：壳按这个字符串拦截；壳没接拦截时页面停留原处无副作用
+          setTimeout(() => { location.href = 'jbxaction://locate?token=' + tok; }, 0);
+          return;
+        }
+
+        // ③ uni-app + web-view 打包：plus 不注入网页，用官方通信桥把定位请求
         //    转给 App 侧（雷馨怡的 index.vue 收到后调 uni.getLocation，再
-        //    evalJS 回调 __jbxFromAppLocation 把坐标送回来，WGS→GCJ 在网页端转）
-        const bridgeReady = !!(window.uni && typeof window.uni.postMessage === 'function');
+        //    evalJS 回调 __jbxFromAppLocation 把坐标送回来，WGS→GCJ 在网页端转）。
+        //    注意：uni-webview.js 在普通浏览器里也会定义 window.uni（SDK 自带
+        //    fallback），所以必须用 UA 里的 uni-app 标记作门，否则浏览器会误走
+        //    这条路、GPS 全部失效（2026-11-22 修）。
+        const isUniWv = /uni-app/i.test(navigator.userAgent);
+        const bridgeReady = isUniWv && !!(window.uni && typeof window.uni.postMessage === 'function');
         if (bridgeReady) {
           const t = { input: input, setPicked: setPicked, done: done, fill: useCoord };
           window.__jbxAppLocTarget = t;
@@ -1528,21 +1571,14 @@
           return;
         }
 
-        // ③ 浏览器：WGS-84 → GCJ-02，不转的话在高德地图上整条路线都会偏
-        navigator.geolocation.getCurrentPosition(pos => {
-          const c = wgs2gcj(pos.coords.longitude, pos.coords.latitude);
-          useCoord(c.lng, c.lat);
-        }, err => {
-          const code = err && err.code;
-          if (code === 3) done('定位超时（信号弱）：请重试，或改用「📍 地图选点」');
-          else failHint();
-        }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+        // ④ 浏览器：WGS-84 → GCJ-02，不转的话在高德地图上整条路线都会偏
+        tryBrowserGPS();
       });
     }
 
-    /* App 侧（uni-app web-view）定位结果的唯一入口：
-       her index.vue 里 uni.getLocation 成功后 evalJS 调 __jbxFromAppLocation(lng,lat)，
-       失败调 __jbxFromAppLocation(null)。坐标是 wgs84，这里统一转 gcj02。 */
+    /* App 侧定位结果的唯一入口（5+App 壳与 uni-app web-view 两种壳共用）：
+       壳代定位成功后 evalJS 调 __jbxFromAppLocation(lng,lat)，失败调
+       __jbxFromAppLocation(null)。坐标约定传 wgs84，这里统一转 gcj02。 */
     window.__jbxFromAppLocation = function (lng0, lat0) {
       const t = window.__jbxAppLocTarget;
       window.__jbxAppLocTarget = null;
@@ -2451,7 +2487,7 @@
 
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡、不挡点击，答辩前留着也无妨。 -->
-  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1121a</div>
+  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1121b</div>
 
 </body>
 </html>
