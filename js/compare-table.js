@@ -54,6 +54,19 @@
   /* ---------- 3. 瓶颈成员：谁让「最长单人」变成这个数 ---------- */
   /* engine.js 用 l.totalMin === worst 判断，耗时并列时会有多人同时是瓶颈，
      所以这里要全取出来拼成「张三、李四」，不能只取第一个。同名成员去重。 */
+  /* 【2026-11-23 补】首列短名：方案全名（如“全员在「武汉理工大学南湖校区游泳馆」汇合”）
+     会把吸附首列挤得很宽，手机上留给右侧数据列的空间太小。
+     表内只显示短名，完整名放 title（长按可看）；方案卡片上仍有全名。 */
+  function shortName(full) {
+    var s = String(full || "");
+    var m = s.match(/^方案[一二三四五\d]+[：:](.*)$/);
+    var body = m ? m[1] : s;                 // 去掉“方案一：”前缀（序号徽章已表达）
+    body = body.replace(/^全员在「(.+)」汇合$/, "全员汇合·$1");
+    body = body.replace(/^部分汇合（(.+)）$/, "部分汇合·$1");
+    if (body.length > 8) body = body.slice(0, 8) + "…";
+    return body || (full || "");
+  }
+
   function bottleneckNames(scheme) {
     var legs = (scheme && scheme.legs) || [];
     var names = [], seen = {};
@@ -149,7 +162,10 @@
       "  border-radius:999px;background:#edf2f7;color:var(--text-sub,#718096);font-size:11px;",
       "  font-weight:700;margin-right:6px;vertical-align:1px;}",
       ".jbx-ct-rank.is-best{background:var(--ok,#2f855a);color:#fff;}",
-      ".jbx-ct-badge{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;",
+      /* 首列短名：限宽省略，全名在 title；给右侧滚动区留更多可视宽度（2026-11-23） */
+      ".jbx-ct-name{display:inline-block;max-width:96px;overflow:hidden;text-overflow:ellipsis;",
+      "  white-space:nowrap;vertical-align:middle;}",
+      ".jbx-ct-badge{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;",,
       "  background:rgba(47,133,90,.14);color:var(--ok,#2f855a);font-size:11px;font-weight:700;vertical-align:1px;}",
       ".jbx-ct-note{margin:6px 0 0;font-size:12px;line-height:1.6;color:var(--text-sub,#718096);}",
       ".jbx-ct-empty{margin:18px 0;padding:16px;border:1px dashed #cbd5e0;border-radius:var(--radius,12px);",
@@ -175,7 +191,7 @@
     /* Q-02 之后人数少时可能只有 1~2 套方案，标题与副注不能写死"三" */
     var nSchemes = schemes.length;
     html.push('<h3 class="jbx-ct-title">' + (nSchemes >= 3 ? '三方案指标对比' : '方案指标对比（共 ' + nSchemes + ' 套）'));
-    html.push('<small>绿底 = 该列最优；五项都是越小越好，额外代价 0 = 本次所有方案里综合最省事；手机上表格可左右滑动查看全部列（首列方案名会固定）</small></h3>');
+    html.push('<small>绿底 = 该列最优；五项都是越小越好，额外代价 0 = 本次所有方案里综合最省事；手机上表格可左右滑动查看全部列（首列方案名会固定，长按方案名可看全称）</small></h3>');
     html.push('<div class="jbx-ct-wrap">');
     html.push('<table class="' + TABLE_CLASS + '">');
     html.push("<thead><tr>");
@@ -191,7 +207,8 @@
       html.push("<tr>");
       html.push("<td>" +
         '<span class="jbx-ct-rank' + (isBest ? " is-best" : "") + '">' + (i + 1) + "</span>" +
-        (s.name || "方案" + (i + 1)) +
+        '<span class="jbx-ct-name" title="' + String(s.name || "").replace(/"/g, "&quot;") + '">' +
+        shortName(s.name || "方案" + (i + 1)) + "</span>" +
         (isBest ? '<span class="jbx-ct-badge">推荐</span>' : "") +
         "</td>");
 
