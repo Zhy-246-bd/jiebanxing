@@ -1474,9 +1474,11 @@
         };
 
         const isWV = /;\s*wv\)/i.test(navigator.userAgent);
+        const shellMark = () => (window.__jbxShellBridge === 1 ? '有' : '无');
         const failHint = () => {
           done(isWV
-            ? 'App 内置浏览器不支持网页定位：请点「📍 地图选点」，把图钉对准出发位置'
+            // 带上壳标记状态，远程排查“她到底打包了没有”（2026-11-22）
+            ? 'App 内定位不可用（定位桥标记：' + shellMark() + '）：请点「📍 地图选点」，把图钉对准出发位置'
             : '没能定位：请允许定位后重试，或改用「📍 地图选点」');
         };
 
@@ -1500,7 +1502,7 @@
                   window.__jbxAppLocTarget = null;
                   failHint();
                 }
-              }, 35000);
+              }, 45000);
               setTimeout(() => { location.href = 'jbxaction://locate'; }, 0);
             }
             else failHint();
@@ -2519,8 +2521,19 @@
   </script>
 
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
-       极淡、不挡点击，答辩前留着也无妨。 -->
-  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1121d</div>
+       极淡。2026-11-22 起可点：连点查看环境诊断（UA/壳标记/plus），
+       远程排障"她打包了没有"用。 -->
+  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1121e</div>
+  <script>
+  document.getElementById('verBadge').addEventListener('click', function () {
+    alert('结伴行环境诊断\n─────────────\n版本: v1121e\n壳标记 __jbxShellBridge: '
+      + (window.__jbxShellBridge === 1 ? '有（App 已接定位桥）' : '无（旧壳或标记未注入）')
+      + '\nplus 对象: ' + (window.plus ? '有' : '无')
+      + '\nUA 含 uni-app: ' + (/uni-app/i.test(navigator.userAgent) ? '是' : '否')
+      + '\nUA 含 Html5Plus: ' + (/Html5Plus/i.test(navigator.userAgent) ? '是' : '否')
+      + '\nUA: ' + navigator.userAgent);
+  });
+  </script>
 
 </body>
 </html>
