@@ -87,6 +87,21 @@ export default {
 2. 壳用 `overrideUrlLoading` 拦截这个协议 → 壳调 `plus.geolocation`（能触发系统授权弹窗）
 3. 壳 `evalJS` 把坐标送回网页 → 网页自动填入出发地并转成高德坐标系
 
+**⚠️ 先修缓存（11/22 深入排查发现）**：APK 的 WebView 会长期缓存旧页面
+（截图角标显示 v1119k，即 11/19 的网页——11/22 的新定位代码根本没被加载）。
+创建 webview 时**必须**加 `cacheMode: "noCache"` 并清一次旧缓存：
+
+```js
+var ws = plus.webview.create(APP_URL, "remote", {
+  cacheMode: "noCache",     // ← 新加：每次都从网络取最新页面
+  ...原有其他参数保留...
+});
+ws.clearCache();            // ← 新加：清掉之前缓存的旧页面
+```
+
+**验收顺序**：先看页面右下角小字版本号——**v1121c 才说明加载到了最新
+网页**；还是 v1119k 就说明缓存没清干净，别急着测定位。
+
 **给壳的 index.html 加这段**（在 `plus.webview.create(APP_URL, "remote", ...)`
 创建出 ws 变量之后、`append`/显示之前插入；替换掉原来的定位相关调用）：
 
