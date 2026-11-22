@@ -91,34 +91,73 @@ export default {
 创建出 ws 变量之后、`append`/显示之前插入；替换掉原来的定位相关调用）：
 
 ```js
-// ===== 结伴行定位拦截（2026-11-22）=====
-// 拦截网页发来的定位请求：网页会跳 jbxaction://locate
+// ===== 结伴行定位拦截 v2（2026-11-22，带回失败原因 + 缓存 + 低精度重试）=====
 ws.overrideUrlLoading({ mode: 'reject', match: 'jbxaction://locate' }, function () {
-  // Android 6+ 必须运行时申请定位权限，才会弹系统授权框
-  function doLocate() {
+  var tries = 0;
+
+  // 统一回传：成功给坐标，失败给原因（网页会把原因显示给用户）
+  function send(lng, lat, msg) {
+    try {
+      ws.evalJS('window.__jbxFromAppLocation(' +
+        (lng == null ? 'null' : lng) + ',' +
+        (lat == null ? 'null' : lat) + ',' +
+        JSON.stringify(msg || '') + ')');
+    } catch (e) {}
+  }
+
+  function describe(err) {
+    var code = err && err.code;
+    var map = {
+      1: '定位权限被拒绝',
+      2: '定位服务不可用（手机定位总开关可能关着）',
+      3: '定位超时（室内信号弱）',
+      9: '没有精确定位权限'
+    };
+    return (map[code] || ('错误码 ' + code)) + ' ' + ((err && err.message) || '');
+  }
+
+  function locate(highAccuracy) {
     plus.geolocation.getCurrentPosition(
       function (pos) {
         var c = (pos && pos.coords) || {};
-        // 约定回传 wgs84 坐标，网页端自己转高德 gcj02，不用管坐标系
-        ws.evalJS('window.__jbxFromAppLocation(' + c.longitude + ',' + c.latitude + ')');
+        if (c.longitude && c.latitude) send(c.longitude, c.latitude);
+        else retry('返回坐标为空');
       },
-      function () {
-        ws.evalJS('window.__jbxFromAppLocation(null)');
-      },
-      { provider: 'system', coordsType: 'wgs84', enableHighAccuracy: true }
+      function (err) { retry(describe(err)); },
+      {
+        provider: 'system',
+        coordsType: 'wgs84',
+        enableHighAccuracy: !!highAccuracy,
+        timeout: 15000,
+        maximumAge: 60000   // 允许用最近 1 分钟的缓存定位，室内也能出结果
+      }
     );
   }
-  if (plus.os.name === 'Android' && plus.android.requestPermissions) {
-    plus.android.requestPermissions(
-      ['android.permission.ACCESS_FINE_LOCATION',
-       'android.permission.ACCESS_COARSE_LOCATION'],
-      function () { doLocate(); },
-      function () { doLocate(); }
-    );
-  } else { doLocate(); }
+
+  function retry(msg) {
+    tries++;
+    if (tries === 1) { locate(false); return; }  // 高精度失败 → 网络/低精度再来一次
+    send(null, null, msg);
+  }
+
+  function start() {
+    if (plus.os.name === 'Android' && plus.android.requestPermissions) {
+      plus.android.requestPermissions(
+        ['android.permission.ACCESS_FINE_LOCATION',
+         'android.permission.ACCESS_COARSE_LOCATION'],
+        function () { setTimeout(function () { locate(true); }, 300); },
+        function () { locate(true); }   // 即使被拒也试一次（可能是大致位置）
+      );
+    } else { locate(true); }
+  }
+  start();
 });
 // ======================================
 ```
+
+> v2 改动（11/22）：原版失败只回传 null，用户只看到"定位失败"没法排查。
+> v2 把错误码/原因带回网页显示；超时 15s、允许缓存定位；高精度失败后
+> 自动用低精度（网络定位）重试一次——室内靠 WiFi/基站也能出大致位置。
 
 **同时确认 manifest.json**（应该已勾过）：
 - App 模块配置 → **Geolocation（定位）** 模块

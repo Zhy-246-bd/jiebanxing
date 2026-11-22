@@ -1530,13 +1530,20 @@
           const t = { input: input, setPicked: setPicked, done: done, fill: useCoord };
           window.__jbxAppLocTarget = t;
           const tok = (window.__jbxLocTok = (window.__jbxLocTok || 0) + 1);
+          // 壳的耗时可能很长：授权弹窗 + 15s 高精度 + 15s 低精度重试。
+          // 所以不能早早判死——12s 只提示一句，40s 才真正放弃。
+          // （之前 6s 就清空目标，壳后来送回的真坐标会被丢掉，2026-11-22 修）
+          setTimeout(() => {
+            if (window.__jbxLocTok === tok && window.__jbxAppLocTarget === t) {
+              toast('App 正在定位（室内较慢，请稍等）…也可以先用「📍 地图选点」', 3000);
+            }
+          }, 12000);
           setTimeout(() => {
             if (window.__jbxLocTok === tok && window.__jbxAppLocTarget === t) {
               window.__jbxAppLocTarget = null;
-              // 壳没接拦截代码或没响应 → 不在这里堵死，降级试浏览器定位
-              tryBrowserGPS();
+              done('App 定位超时：请检查手机「定位服务」总开关和精确定位权限，或改用「📍 地图选点」');
             }
-          }, 6000);
+          }, 40000);
           // 自定义协议：壳按这个字符串拦截；壳没接拦截时页面停留原处无副作用
           setTimeout(() => { location.href = 'jbxaction://locate?token=' + tok; }, 0);
           return;
@@ -1577,16 +1584,21 @@
     }
 
     /* App 侧定位结果的唯一入口（5+App 壳与 uni-app web-view 两种壳共用）：
-       壳代定位成功后 evalJS 调 __jbxFromAppLocation(lng,lat)，失败调
-       __jbxFromAppLocation(null)。坐标约定传 wgs84，这里统一转 gcj02。 */
-    window.__jbxFromAppLocation = function (lng0, lat0) {
+       成功 evalJS 调 __jbxFromAppLocation(lng, lat)；
+       失败调 __jbxFromAppLocation(null, null, '错误说明')。
+       坐标约定传 wgs84，这里统一转 gcj02。
+       第三参数是 2026-11-22 加的诊断信息——壳那边的错误（定位服务未开 /
+       超时 / 无精确定位权限）原样带给用户，别让失败原因烂在 App 里。 */
+    window.__jbxFromAppLocation = function (lng0, lat0, errMsg) {
       const t = window.__jbxAppLocTarget;
       window.__jbxAppLocTarget = null;
       window.__jbxLocTok = (window.__jbxLocTok || 0) + 1;   // 使超时失效
       if (!t) return;
       const lng = Number(lng0), lat = Number(lat0);
       if (!isFinite(lng) || !isFinite(lat) || (!lng && !lat)) {
-        t.done('App 定位失败（可能没给 App 定位权限）：请改用「📍 地图选点」');
+        const why = errMsg ? '（' + String(errMsg).slice(0, 60) + '）' : '';
+        t.done('App 定位没拿到坐标' + why + '：请检查手机「定位服务」是否开启、'
+               + '是否给了精确定位权限，或改用「📍 地图选点」');
         return;
       }
       const c = wgs2gcj(lng, lat);
@@ -2487,7 +2499,7 @@
 
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡、不挡点击，答辩前留着也无妨。 -->
-  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1121b</div>
+  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1121c</div>
 
 </body>
 </html>
