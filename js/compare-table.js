@@ -175,7 +175,7 @@
     /* Q-02 之后人数少时可能只有 1~2 套方案，标题与副注不能写死"三" */
     var nSchemes = schemes.length;
     html.push('<h3 class="jbx-ct-title">' + (nSchemes >= 3 ? '三方案指标对比' : '方案指标对比（共 ' + nSchemes + ' 套）'));
-    html.push('<small>绿底 = 该列最优；五项都是越小越好，额外代价 0 = 本次所有方案里综合最省事</small></h3>');
+    html.push('<small>绿底 = 该列最优；五项都是越小越好，额外代价 0 = 本次所有方案里综合最省事；手机上表格可左右滑动查看全部列（首列方案名会固定）</small></h3>');
     html.push('<div class="jbx-ct-wrap">');
     html.push('<table class="' + TABLE_CLASS + '">');
     html.push("<thead><tr>");
