@@ -464,7 +464,7 @@
             <div style="display:flex;gap:8px;align-items:stretch">
               <textarea id="fromInput" name="from" rows="1"
                      placeholder="输入小区/地铁站/学校名，从列表里选准位置"
-                     style="flex:1;min-width:0;height:46px;min-height:46px;max-height:66px;
+                     style="flex:1;min-width:0;height:46px;min-height:46px;max-height:110px;
                             resize:none;overflow:hidden;line-height:20px;padding:0 12px"></textarea>
               <button type="button" id="fromClearBtn"
                       title="一键清空，重新填写"
@@ -664,7 +664,7 @@
           <div style="display:flex;gap:8px;align-items:stretch">
             <textarea id="memberFromInput" rows="1" maxlength="60"
                    placeholder="输入地名从列表选择，可不填" autocomplete="off"
-                   style="flex:1;min-width:0;height:46px;min-height:46px;max-height:66px;
+                   style="flex:1;min-width:0;height:46px;min-height:46px;max-height:110px;
                           resize:none;overflow:hidden;line-height:20px;padding:0 12px"></textarea>
             <button type="button" id="memberClearBtn"
                     title="一键清空，重新填写"
@@ -1748,7 +1748,7 @@
         try {
           el.style.height = '20px';
           const need = Math.max(el.scrollHeight, 46);
-          el.style.height = Math.min(need, 66) + 'px';
+          el.style.height = Math.min(need, 110) + 'px';
         } catch (e) {}
       };
       el.addEventListener('input', fit);
@@ -2671,10 +2671,10 @@
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡。2026-11-22 起可点：连点查看环境诊断（UA/壳标记/plus），
        远程排障"她打包了没有"用。 -->
-  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1122c</div>
+  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1122d</div>
   <script>
   document.getElementById('verBadge').addEventListener('click', function () {
-    alert('结伴行环境诊断\n─────────────\n版本: v1122c\n壳标记 __jbxShellBridge: '
+    alert('结伴行环境诊断\n─────────────\n版本: v1122d\n壳标记 __jbxShellBridge: '
       + (window.__jbxShellBridge === 1 ? '有（App 已接定位桥）' : '无（旧壳或标记未注入）')
       + '\nplus 对象: ' + (window.plus ? '有' : '无')
       + '\nUA 含 uni-app: ' + (/uni-app/i.test(navigator.userAgent) ? '是' : '否')
@@ -2689,7 +2689,7 @@
      页面启动后向服务器要一次小文件（强制走网络），发现不一致就带 ?v= 重新进页面，
      ?v= 让 WebView 的缓存键变化，于是必然拿到新页面。 */
   (function () {
-    var JBX_BUILD = '1122c';
+    var JBX_BUILD = '1122d';
     try {
       if (!window.fetch) return;
       fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
