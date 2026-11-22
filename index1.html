@@ -1539,31 +1539,37 @@
         //     默认不注入远程页面。正解是跳自定义协议让壳拦截
         //     （overrideUrlLoading）：壳调 plus.geolocation（能触发系统
         //     授权弹窗）后 evalJS 送回坐标。
-        //     检测手段（v1121d 起两条并用，UA 不可靠——实测远程 WebView
-        //     的 UA 可能不带 Html5Plus/HBuilder 标记）：
-        //     a) 壳在 loaded 事件里 evalJS 注入 window.__jbxShellBridge = 1；
-        //     b) UA 兼容判断保留，旧版壳也能命中。
+        //     检测条件（v1121f）：标记 __jbxShellBridge 为 1，**或**
+        //     UA 是 Android WebView（`; wv)`）。实测远程 WebView 的 UA
+        //     既无 Html5Plus，壳的注入标记也可能因未重新打包而缺失，
+        //     所以不能只靠标记——宁可先试壳通道（壳没接拦截时 25s 后
+        //     自动回退浏览器 GPS，不影响正常手机浏览器）。
         const isPlusShell = window.__jbxShellBridge === 1 ||
           (/Html5Plus|HBuilder/i.test(navigator.userAgent) &&
            !/uni-app/i.test(navigator.userAgent));
-        if (isPlusShell) {
+        if (isPlusShell || isWV) {
           const t = { input: input, setPicked: setPicked, done: done, fill: useCoord };
           window.__jbxAppLocTarget = t;
           const tok = (window.__jbxLocTok = (window.__jbxLocTok || 0) + 1);
-          // 壳的耗时可能很长：授权弹窗 + 15s 高精度 + 15s 低精度重试。
-          // 所以不能早早判死——12s 只提示一句，40s 才真正放弃。
-          // （之前 6s 就清空目标，壳后来送回的真坐标会被丢掉，2026-11-22 修）
+          window.__jbxSchemeTried = true;
+          // 有标记（壳明确接桥）：授权+15s 高精度+15s 重试，给足 40s；
+          // 只有 WebView 特征（壳可能没接）：25s 后回退浏览器 GPS，
+          // 但目标保留——壳晚到的坐标仍然会回填，不浪费。
+          const waitMs = isPlusShell ? 40000 : 25000;
           setTimeout(() => {
             if (window.__jbxLocTok === tok && window.__jbxAppLocTarget === t) {
               toast('App 正在定位（室内较慢，请稍等）…也可以先用「📍 地图选点」', 3000);
             }
           }, 12000);
           setTimeout(() => {
-            if (window.__jbxLocTok === tok && window.__jbxAppLocTarget === t) {
+            if (window.__jbxLocTok !== tok || window.__jbxAppLocTarget !== t) return;
+            if (isPlusShell) {
               window.__jbxAppLocTarget = null;
               done('App 定位超时：请检查手机「定位服务」总开关和精确定位权限，或改用「📍 地图选点」');
+            } else {
+              tryBrowserGPS();
             }
-          }, 40000);
+          }, waitMs);
           // 自定义协议：壳按这个字符串拦截；壳没接拦截时页面停留原处无副作用
           setTimeout(() => { location.href = 'jbxaction://locate?token=' + tok; }, 0);
           return;
@@ -2523,10 +2529,10 @@
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡。2026-11-22 起可点：连点查看环境诊断（UA/壳标记/plus），
        远程排障"她打包了没有"用。 -->
-  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1121e</div>
+  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1121f</div>
   <script>
   document.getElementById('verBadge').addEventListener('click', function () {
-    alert('结伴行环境诊断\n─────────────\n版本: v1121e\n壳标记 __jbxShellBridge: '
+    alert('结伴行环境诊断\n─────────────\n版本: v1121f\n壳标记 __jbxShellBridge: '
       + (window.__jbxShellBridge === 1 ? '有（App 已接定位桥）' : '无（旧壳或标记未注入）')
       + '\nplus 对象: ' + (window.plus ? '有' : '无')
       + '\nUA 含 uni-app: ' + (/uni-app/i.test(navigator.userAgent) ? '是' : '否')
