@@ -1577,15 +1577,12 @@
         const failHint = () => {
           if (!ipTried) {
             // 最后一条自动通道：高德 H5 网络粗定位（App 内不用重打包也能出坐标）
+            // 2026-11-22 v1122h：按用户要求去掉两条进度/结果气泡——按钮"定位中…"已是反馈，
+            // 成功后地址直接填进输入框，看得见；不打断填写
             ipTried = true;
-            toast('正在用网络粗定位（精度较低）…', 2500);
             jbxAMapIPGeo(c => {
               if (c && isFinite(c.lng) && isFinite(c.lat)) {
                 useCoord(c.lng, c.lat);
-                setTimeout(() => {
-                  toast('已按网络位置粗定位，可能有偏差——请核对出发地，'
-                        + '不准就点「📍 地图选点」手动定', 4500);
-                }, 300);
               } else {
                 done(isWV
                   ? 'App 内定位不可用（定位桥标记：' + shellMark() + '）：请点「📍 地图选点」，把图钉对准出发位置'
@@ -2725,10 +2722,10 @@
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡。2026-11-22 起可点：连点查看环境诊断（UA/壳标记/plus），
        远程排障"她打包了没有"用。 -->
-  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1122g</div>
+  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1122h</div>
   <script>
   document.getElementById('verBadge').addEventListener('click', function () {
-    alert('结伴行环境诊断\n─────────────\n版本: v1122g\n壳标记 __jbxShellBridge: '
+    alert('结伴行环境诊断\n─────────────\n版本: v1122h\n壳标记 __jbxShellBridge: '
       + (window.__jbxShellBridge === 1 ? '有（App 已接定位桥）' : '无（旧壳或标记未注入）')
       + '\nplus 对象: ' + (window.plus ? '有' : '无')
       + '\nUA 含 uni-app: ' + (/uni-app/i.test(navigator.userAgent) ? '是' : '否')
@@ -2743,7 +2740,7 @@
      页面启动后向服务器要一次小文件（强制走网络），发现不一致就带 ?v= 重新进页面，
      ?v= 让 WebView 的缓存键变化，于是必然拿到新页面。 */
   (function () {
-    var JBX_BUILD = '1122g';
+    var JBX_BUILD = '1122h';
     try {
       if (!window.fetch) return;
       fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
