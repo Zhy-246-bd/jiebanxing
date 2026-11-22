@@ -1421,6 +1421,51 @@
       return { lng: lng + dLng, lat: lat + dLat };
     }
 
+    /* 高德 H5「网络粗定位」（2026-11-22，第六条通道）：
+       Android WebView 里 navigator.geolocation 经常被壳吞掉，
+       但高德 JS 的 Geolocation 插件可以纯靠 IP/WiFi 出一个城市级坐标，
+       不需要任何安卓定位权限——App 内不用重打包也能"定位成功"。
+       精度低（可能偏几公里），所以成功后要提醒用户核对或改地图选点。
+       cb({lng,lat,acc}) 或 cb(null)；绝不抛错、绝不长时间挂起。 */
+    function jbxAMapIPGeo(cb) {
+      let settled = false;
+      const fin = (r) => { if (!settled) { settled = true; try { cb(r); } catch (e) {} } };
+      const timer = setTimeout(() => fin(null), 10000);
+      const done = (r) => { clearTimeout(timer); fin(r); };
+      const go = (AMap) => {
+        try {
+          AMap.plugin('AMap.Geolocation', function () {
+            const geo = new AMap.Geolocation({
+              timeout: 8000,
+              noIpLocate: 0,          // 允许 IP 定位兜底
+              enableHighAccuracy: false,
+              GeoLocationFirst: false,
+              needAddress: false
+            });
+            geo.getCurrentPosition((status, result) => {
+              const p = result && result.position;
+              if (status === 'complete' && p && isFinite(p.lng) && isFinite(p.lat)) {
+                done({ lng: p.lng, lat: p.lat, acc: result.accuracy });
+              } else { done(null); }
+            });
+          });
+        } catch (e) { done(null); }
+      };
+      try {
+        if (window.AMap && window.AMap.Map) { go(window.AMap); return; }
+        const key = window.__AMAP_JS_KEY__;
+        if (!key) { done(null); return; }
+        if (window.__AMAP_JS_CODE__) {
+          window._AMapSecurityConfig = { securityJsCode: window.__AMAP_JS_CODE__ };
+        }
+        const s = document.createElement('script');
+        s.src = 'https://webapi.amap.com/maps?v=2.0&key=' + encodeURIComponent(key);
+        s.onload = () => { (window.AMap && window.AMap.Map) ? go(window.AMap) : done(null); };
+        s.onerror = () => done(null);
+        document.head.appendChild(s);
+      } catch (e) { done(null); }
+    }
+
     /* 把「定位」按钮接到某个出发地输入框上（本人 + 代填成员共用一套） */
     function bindLocateBtn(btnId, inputSel, setPicked) {
       const btn = document.getElementById(btnId);
@@ -1447,6 +1492,12 @@
         const done = (msg) => {
           btn.disabled = false;
           btn.textContent = btnText;
+          /* 定位结束恢复标题，让壳 v3 的标题轮询知道这一轮已处理完 */
+          try {
+            if (/^jbxloc:/.test(String(document.title))) {
+              document.title = '结伴行 · 多人出行路线智能规划';
+            }
+          } catch (e) {}
           if (msg) toast(msg);
         };
 
@@ -1475,7 +1526,27 @@
 
         const isWV = /;\s*wv\)/i.test(navigator.userAgent);
         const shellMark = () => (window.__jbxShellBridge === 1 ? '有' : '无');
+        let ipTried = false;   // 本次点击里粗定位只试一次，防止循环
         const failHint = () => {
+          if (!ipTried) {
+            // 最后一条自动通道：高德 H5 网络粗定位（App 内不用重打包也能出坐标）
+            ipTried = true;
+            toast('正在用网络粗定位（精度较低）…', 2500);
+            jbxAMapIPGeo(c => {
+              if (c && isFinite(c.lng) && isFinite(c.lat)) {
+                useCoord(c.lng, c.lat);
+                setTimeout(() => {
+                  toast('已按网络位置粗定位，可能有偏差——请核对出发地，'
+                        + '不准就点「📍 地图选点」手动定', 4500);
+                }, 300);
+              } else {
+                done(isWV
+                  ? 'App 内定位不可用（定位桥标记：' + shellMark() + '）：请点「📍 地图选点」，把图钉对准出发位置'
+                  : '没能定位：请允许定位后重试，或改用「📍 地图选点」');
+              }
+            });
+            return;
+          }
           done(isWV
             // 带上壳标记状态，远程排查“她到底打包了没有”（2026-11-22）
             ? 'App 内定位不可用（定位桥标记：' + shellMark() + '）：请点「📍 地图选点」，把图钉对准出发位置'
@@ -1552,15 +1623,18 @@
           window.__jbxAppLocTarget = t;
           const tok = (window.__jbxLocTok = (window.__jbxLocTok || 0) + 1);
           window.__jbxSchemeTried = true;
+          /* 给壳 v3 的标题信号：壳轮询 ws.getTitle()，看到 jbxloc:数字 就代定位。
+             不依赖自定义协议拦截是否生效（2026-11-22 v1122a）。 */
+          try { document.title = 'jbxloc:' + tok; } catch (e) {}
           // 有标记（壳明确接桥）：授权+15s 高精度+15s 重试，给足 40s；
-          // 只有 WebView 特征（壳可能没接）：25s 后回退浏览器 GPS，
+          // 只有 WebView 特征（壳可能没接）：12s 后回退浏览器 GPS，
           // 但目标保留——壳晚到的坐标仍然会回填，不浪费。
-          const waitMs = isPlusShell ? 40000 : 25000;
+          const waitMs = isPlusShell ? 40000 : 12000;
           setTimeout(() => {
             if (window.__jbxLocTok === tok && window.__jbxAppLocTarget === t) {
               toast('App 正在定位（室内较慢，请稍等）…也可以先用「📍 地图选点」', 3000);
             }
-          }, 12000);
+          }, 8000);
           setTimeout(() => {
             if (window.__jbxLocTok !== tok || window.__jbxAppLocTarget !== t) return;
             if (isPlusShell) {
@@ -2529,10 +2603,10 @@
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡。2026-11-22 起可点：连点查看环境诊断（UA/壳标记/plus），
        远程排障"她打包了没有"用。 -->
-  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1121f</div>
+  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1122a</div>
   <script>
   document.getElementById('verBadge').addEventListener('click', function () {
-    alert('结伴行环境诊断\n─────────────\n版本: v1121f\n壳标记 __jbxShellBridge: '
+    alert('结伴行环境诊断\n─────────────\n版本: v1122a\n壳标记 __jbxShellBridge: '
       + (window.__jbxShellBridge === 1 ? '有（App 已接定位桥）' : '无（旧壳或标记未注入）')
       + '\nplus 对象: ' + (window.plus ? '有' : '无')
       + '\nUA 含 uni-app: ' + (/uni-app/i.test(navigator.userAgent) ? '是' : '否')
@@ -2547,7 +2621,7 @@
      页面启动后向服务器要一次小文件（强制走网络），发现不一致就带 ?v= 重新进页面，
      ?v= 让 WebView 的缓存键变化，于是必然拿到新页面。 */
   (function () {
-    var JBX_BUILD = '1121f';
+    var JBX_BUILD = '1122a';
     try {
       if (!window.fetch) return;
       fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
