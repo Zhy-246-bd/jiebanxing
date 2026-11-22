@@ -1488,6 +1488,21 @@
           }, err => {
             const code = err && err.code;
             if (code === 3) done('定位超时（信号弱）：请重试，或改用「📍 地图选点」');
+            else if (code === 1 && isWV && !window.__jbxSchemeTried) {
+              // WebView 里 GPS 被拒多半是壳没接定位桥 —— 补试壳拦截通道
+              window.__jbxSchemeTried = true;
+              toast('正在通过 App 定位…');
+              const t = { input: input, setPicked: setPicked, done: done, fill: useCoord };
+              window.__jbxAppLocTarget = t;
+              const tok = (window.__jbxLocTok = (window.__jbxLocTok || 0) + 1);
+              setTimeout(() => {
+                if (window.__jbxLocTok === tok && window.__jbxAppLocTarget === t) {
+                  window.__jbxAppLocTarget = null;
+                  failHint();
+                }
+              }, 35000);
+              setTimeout(() => { location.href = 'jbxaction://locate'; }, 0);
+            }
             else failHint();
           }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
         };
@@ -1519,13 +1534,16 @@
 
         // ②′ 5+App 远程 WebView（2026-11-22）：雷馨怡的壳是
         //     plus.webview.create(APP_URL) 加载远程网址——出于安全，plus 对象
-        //     默认不注入远程页面，但 UA 里会带 Html5Plus/HBuilder 标记。
-        //     这种环境里 navigator.geolocation 拿不到运行时授权弹不出，
-        //     正解是跳自定义协议让壳拦截（overrideUrlLoading）：壳调
-        //     plus.geolocation（能触发系统授权弹窗）后 evalJS 送回坐标。
-        //     先排除 uni-app UA（uni-app webview 的 UA 可能同时含 Html5Plus）。
-        const isPlusShell = /Html5Plus|HBuilder/i.test(navigator.userAgent) &&
-                            !/uni-app/i.test(navigator.userAgent);
+        //     默认不注入远程页面。正解是跳自定义协议让壳拦截
+        //     （overrideUrlLoading）：壳调 plus.geolocation（能触发系统
+        //     授权弹窗）后 evalJS 送回坐标。
+        //     检测手段（v1121d 起两条并用，UA 不可靠——实测远程 WebView
+        //     的 UA 可能不带 Html5Plus/HBuilder 标记）：
+        //     a) 壳在 loaded 事件里 evalJS 注入 window.__jbxShellBridge = 1；
+        //     b) UA 兼容判断保留，旧版壳也能命中。
+        const isPlusShell = window.__jbxShellBridge === 1 ||
+          (/Html5Plus|HBuilder/i.test(navigator.userAgent) &&
+           !/uni-app/i.test(navigator.userAgent));
         if (isPlusShell) {
           const t = { input: input, setPicked: setPicked, done: done, fill: useCoord };
           window.__jbxAppLocTarget = t;
@@ -1578,7 +1596,10 @@
           return;
         }
 
-        // ④ 浏览器：WGS-84 → GCJ-02，不转的话在高德地图上整条路线都会偏
+        // ④ 浏览器：WGS-84 → GCJ-02，不转的话在高德地图上整条路线都会偏。
+        //    Android WebView（v1121d）：GPS 被拒/无桥时补试一次壳通道——
+        //    旣然壳那边已接了 overrideUrlLoading，多试一次不吃亏；
+        //    普通浏览器不会走到这里（isWV 为 false）。
         tryBrowserGPS();
       });
     }
@@ -2499,7 +2520,7 @@
 
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡、不挡点击，答辩前留着也无妨。 -->
-  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1121c</div>
+  <div aria-hidden="true" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);pointer-events:none;z-index:5">v1121d</div>
 
 </body>
 </html>

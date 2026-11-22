@@ -106,6 +106,12 @@ ws.clearCache();            // ← 新加：清掉之前缓存的旧页面
 创建出 ws 变量之后、`append`/显示之前插入；替换掉原来的定位相关调用）：
 
 ```js
+// 让网页认出自己在壳里（v1121d 起必须：远程 webview 的 UA 实测不带
+// Html5Plus 标记，网页只能靠这个注入标记认出壳环境）
+ws.addEventListener('loaded', function () {
+  ws.evalJS('window.__jbxShellBridge = 1');
+});
+
 // ===== 结伴行定位拦截 v2（2026-11-22，带回失败原因 + 缓存 + 低精度重试）=====
 ws.overrideUrlLoading({ mode: 'reject', match: 'jbxaction://locate' }, function () {
   var tries = 0;
