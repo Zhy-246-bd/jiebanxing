@@ -2541,5 +2541,27 @@
   });
   </script>
 
+  <script>
+  /* ===== 版本自愈（v1121f 起）：防止 App 内 WebView 一直吃旧缓存 =====
+     每次发版把 JBX_BUILD 和根目录 version.json 的 v 改成同一个新值即可。
+     页面启动后向服务器要一次小文件（强制走网络），发现不一致就带 ?v= 重新进页面，
+     ?v= 让 WebView 的缓存键变化，于是必然拿到新页面。 */
+  (function () {
+    var JBX_BUILD = '1121f';
+    try {
+      if (!window.fetch) return;
+      fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (!j || !j.v || j.v === JBX_BUILD) return;
+          var key = 'jbxBuild_' + j.v;
+          try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch (e) {}
+          location.replace('index1.html?v=' + encodeURIComponent(j.v));
+        })
+        .catch(function () {});
+    } catch (e) {}
+  })();
+  </script>
+
 </body>
 </html>
