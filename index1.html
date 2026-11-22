@@ -461,25 +461,27 @@
             <!-- 2026-11-21 自动定位：手机上一键拿当前位置，GPS 坐标经 WGS→GCJ 转换
                  + regeo 逆地理回填（不用加载 200KB 地图 SDK）。
                  布局用行内 style，不动 css/style1.css（陈滢竹的文件）。 -->
-            <div style="display:flex;gap:8px;align-items:stretch">
-              <textarea id="fromInput" name="from" rows="1"
+            <!-- 2026-11-22 v1122e：地址框独占一行（之前和 3 个按钮挤一行，
+                 手机上按钮把地址框压成 2 字宽的窄竖条）；按钮另起一行平分宽度 -->
+            <textarea id="fromInput" name="from" rows="1"
                      placeholder="输入小区/地铁站/学校名，从列表里选准位置"
-                     style="flex:1;min-width:0;height:46px;min-height:46px;max-height:110px;
+                     style="display:block;width:100%;height:46px;min-height:46px;max-height:110px;
                             resize:none;overflow:hidden;line-height:20px;padding:0 12px"></textarea>
+            <div style="display:flex;gap:8px;margin-top:8px">
               <button type="button" id="fromClearBtn"
                       title="一键清空，重新填写"
-                      style="flex:none;border:1px solid #cbd8e6;background:#f5f8fc;color:#5a6a7a;
-                             border-radius:10px;padding:0 12px;font-size:13px;font-family:inherit;
+                      style="flex:none;width:44px;border:1px solid #cbd8e6;background:#f5f8fc;color:#5a6a7a;
+                             border-radius:10px;padding:12px 0;font-size:13px;font-family:inherit;
                              cursor:pointer;white-space:nowrap">✕</button>
               <button type="button" id="fromLocateBtn"
                       title="自动定位到当前位置"
-                      style="flex:none;border:1px solid #cbd8e6;background:#ebf4ff;color:#2b6cb0;
-                             border-radius:10px;padding:0 12px;font-size:13px;font-family:inherit;
+                      style="flex:1;border:1px solid #cbd8e6;background:#ebf4ff;color:#2b6cb0;
+                             border-radius:10px;padding:12px 8px;font-size:13px;font-family:inherit;
                              cursor:pointer;white-space:nowrap">🎯 定位</button>
               <button type="button" id="fromPickBtn"
                       title="在地图上拖动选点"
-                      style="flex:none;border:1px solid #cbd8e6;background:#ebf4ff;color:#2b6cb0;
-                             border-radius:10px;padding:0 12px;font-size:13px;font-family:inherit;
+                      style="flex:1;border:1px solid #cbd8e6;background:#ebf4ff;color:#2b6cb0;
+                             border-radius:10px;padding:12px 8px;font-size:13px;font-family:inherit;
                              cursor:pointer;white-space:nowrap">📍 地图选点</button>
             </div>
           </div>
@@ -661,20 +663,21 @@
         <div class="field">
           <label>出发地（选填）</label>
           <!-- 2026-11-21 代填成员也能一键定位，与本人出发地同一套逻辑 -->
-          <div style="display:flex;gap:8px;align-items:stretch">
-            <textarea id="memberFromInput" rows="1" maxlength="60"
+          <!-- 2026-11-22 v1122e：与本人表单同款两行布局，地址框不再被按钮挤压 -->
+          <textarea id="memberFromInput" rows="1" maxlength="60"
                    placeholder="输入地名从列表选择，可不填" autocomplete="off"
-                   style="flex:1;min-width:0;height:46px;min-height:46px;max-height:110px;
+                   style="display:block;width:100%;height:46px;min-height:46px;max-height:110px;
                           resize:none;overflow:hidden;line-height:20px;padding:0 12px"></textarea>
+          <div style="display:flex;gap:8px;margin-top:8px">
             <button type="button" id="memberClearBtn"
                     title="一键清空，重新填写"
-                    style="flex:none;border:1px solid #cbd8e6;background:#f5f8fc;color:#5a6a7a;
-                           border-radius:10px;padding:0 12px;font-size:13px;font-family:inherit;
+                    style="flex:none;width:44px;border:1px solid #cbd8e6;background:#f5f8fc;color:#5a6a7a;
+                           border-radius:10px;padding:12px 0;font-size:13px;font-family:inherit;
                            cursor:pointer;white-space:nowrap">✕</button>
             <button type="button" id="memberLocateBtn"
                     title="自动定位到当前位置"
-                    style="flex:none;border:1px solid #cbd8e6;background:#ebf4ff;color:#2b6cb0;
-                           border-radius:10px;padding:0 12px;font-size:13px;font-family:inherit;
+                    style="flex:1;border:1px solid #cbd8e6;background:#ebf4ff;color:#2b6cb0;
+                           border-radius:10px;padding:12px 8px;font-size:13px;font-family:inherit;
                            cursor:pointer;white-space:nowrap">🎯 定位</button>
           </div>
         </div>
@@ -2671,10 +2674,10 @@
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡。2026-11-22 起可点：连点查看环境诊断（UA/壳标记/plus），
        远程排障"她打包了没有"用。 -->
-  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1122d</div>
+  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1122e</div>
   <script>
   document.getElementById('verBadge').addEventListener('click', function () {
-    alert('结伴行环境诊断\n─────────────\n版本: v1122d\n壳标记 __jbxShellBridge: '
+    alert('结伴行环境诊断\n─────────────\n版本: v1122e\n壳标记 __jbxShellBridge: '
       + (window.__jbxShellBridge === 1 ? '有（App 已接定位桥）' : '无（旧壳或标记未注入）')
       + '\nplus 对象: ' + (window.plus ? '有' : '无')
       + '\nUA 含 uni-app: ' + (/uni-app/i.test(navigator.userAgent) ? '是' : '否')
@@ -2689,7 +2692,7 @@
      页面启动后向服务器要一次小文件（强制走网络），发现不一致就带 ?v= 重新进页面，
      ?v= 让 WebView 的缓存键变化，于是必然拿到新页面。 */
   (function () {
-    var JBX_BUILD = '1122d';
+    var JBX_BUILD = '1122e';
     try {
       if (!window.fetch) return;
       fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
