@@ -464,6 +464,11 @@
             <div style="display:flex;gap:8px;align-items:stretch">
               <input id="fromInput" name="from" type="text" style="flex:1;min-width:0"
                      placeholder="输入小区/地铁站/学校名，从列表里选准位置">
+              <button type="button" id="fromClearBtn"
+                      title="一键清空，重新填写"
+                      style="flex:none;border:1px solid #cbd8e6;background:#f5f8fc;color:#5a6a7a;
+                             border-radius:10px;padding:0 12px;font-size:13px;font-family:inherit;
+                             cursor:pointer;white-space:nowrap">✕</button>
               <button type="button" id="fromLocateBtn"
                       title="自动定位到当前位置"
                       style="flex:none;border:1px solid #cbd8e6;background:#ebf4ff;color:#2b6cb0;
@@ -655,8 +660,13 @@
           <label>出发地（选填）</label>
           <!-- 2026-11-21 代填成员也能一键定位，与本人出发地同一套逻辑 -->
           <div style="display:flex;gap:8px;align-items:stretch">
-            <input id="memberFromInput" type="text" maxlength="30" style="flex:1;min-width:0"
+            <input id="memberFromInput" type="text" maxlength="60" style="flex:1;min-width:0"
                    placeholder="输入地名从列表选择，可不填" autocomplete="off">
+            <button type="button" id="memberClearBtn"
+                    title="一键清空，重新填写"
+                    style="flex:none;border:1px solid #cbd8e6;background:#f5f8fc;color:#5a6a7a;
+                           border-radius:10px;padding:0 12px;font-size:13px;font-family:inherit;
+                           cursor:pointer;white-space:nowrap">✕</button>
             <button type="button" id="memberLocateBtn"
                     title="自动定位到当前位置"
                     style="flex:none;border:1px solid #cbd8e6;background:#ebf4ff;color:#2b6cb0;
@@ -1421,6 +1431,16 @@
       return { lng: lng + dLng, lat: lat + dLat };
     }
 
+    /* 定位回填的地址常带「湖北省武汉市…」长前缀，输入框显示不全、改字也难。
+       显示时去掉省前缀，还长就去掉市前缀，只留区级起的短地址；
+       坐标本身是精确的，engine 解析时 seedCoord 缓存按短名命中，不受影响。 */
+    function shortAddr(name) {
+      let s = String(name || '');
+      s = s.replace(/^([^省]{1,8}省)/, '');
+      if (s.length > 16) s = s.replace(/^([^市]{1,8}市)/, '');
+      return s;
+    }
+
     /* 高德 H5「网络粗定位」（2026-11-22，第六条通道）：
        Android WebView 里 navigator.geolocation 经常被壳吞掉，
        但高德 JS 的 Geolocation 插件可以纯靠 IP/WiFi 出一个城市级坐标，
@@ -1506,10 +1526,11 @@
           const lng = Number(lng0.toFixed(6)), lat = Number(lat0.toFixed(6));
           const coordName = lng.toFixed(5) + ',' + lat.toFixed(5);
           const apply = (name, adcode) => {
-            input.value = name;
+            const show = shortAddr(name) || name || coordName;
+            input.value = show;
             input.classList.remove('error');
-            setPicked({ lng: lng, lat: lat, name: name });
-            if (typeof seedCoord === 'function') seedCoord(name, lng, lat, adcode || state.cityCode);
+            setPicked({ lng: lng, lat: lat, name: show });
+            if (typeof seedCoord === 'function') seedCoord(show, lng, lat, adcode || state.cityCode);
             const myCity = String(adcode || '').slice(0, 4);
             const roomCity = String(state.cityCode || '').slice(0, 4);
             if (myCity && roomCity && myCity !== roomCity) {
@@ -1712,6 +1733,22 @@
     attachTips($('#fromInput'), t => { pickedFrom = t ? { lng: t.lng, lat: t.lat } : null; }, () => state.cityCode);
     bindLocateBtn('fromLocateBtn', '#fromInput', p => { pickedFrom = p; });
 
+    /* 出发地一键清空（2026-11-22 v1122b）：定位回填的地址长，
+       手机上想在中间改几个字很费劲，不如 ✕ 一下重填/重选 */
+    function bindClearBtn(btnId, inputSel, onClear) {
+      const b = document.getElementById(btnId);
+      const inp = document.querySelector(inputSel);
+      if (!b || !inp) return;
+      b.addEventListener('click', () => {
+        inp.value = '';
+        inp.classList.remove('error');
+        if (typeof onClear === 'function') onClear();
+        inp.focus();
+        toast('已清空，重新输入或点「📍 地图选点」', 2200);
+      });
+    }
+    bindClearBtn('fromClearBtn', '#fromInput', () => { pickedFrom = null; });
+
     /* ── 出发地「地图选点」（2026-11-16）────────────────────────────
        手打地名 → 地理编码取第一个匹配，是"出发地坐标不准"的根因；
        地图选点拿的是官方底图上的点，坐标就是用户看到的那个位置。
@@ -1758,6 +1795,7 @@
     let pickedMemberFrom = null;    // 发起人代填成员的精确坐标
     attachTips($('#memberFromInput'), t => { pickedMemberFrom = t ? { lng: t.lng, lat: t.lat } : null; }, () => state.cityCode);
     bindLocateBtn('memberLocateBtn', '#memberFromInput', p => { pickedMemberFrom = p; });
+    bindClearBtn('memberClearBtn', '#memberFromInput', () => { pickedMemberFrom = null; });
 
     // 目的地也接联想：终点坐标同样决定整条路线，手打一样会偏
     // 选中即 seedCoord 注入本机解析缓存（发起人在本机生成方案，不需要上云）
@@ -2603,10 +2641,10 @@
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡。2026-11-22 起可点：连点查看环境诊断（UA/壳标记/plus），
        远程排障"她打包了没有"用。 -->
-  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1122a</div>
+  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1122b</div>
   <script>
   document.getElementById('verBadge').addEventListener('click', function () {
-    alert('结伴行环境诊断\n─────────────\n版本: v1122a\n壳标记 __jbxShellBridge: '
+    alert('结伴行环境诊断\n─────────────\n版本: v1122b\n壳标记 __jbxShellBridge: '
       + (window.__jbxShellBridge === 1 ? '有（App 已接定位桥）' : '无（旧壳或标记未注入）')
       + '\nplus 对象: ' + (window.plus ? '有' : '无')
       + '\nUA 含 uni-app: ' + (/uni-app/i.test(navigator.userAgent) ? '是' : '否')
@@ -2621,7 +2659,7 @@
      页面启动后向服务器要一次小文件（强制走网络），发现不一致就带 ?v= 重新进页面，
      ?v= 让 WebView 的缓存键变化，于是必然拿到新页面。 */
   (function () {
-    var JBX_BUILD = '1122a';
+    var JBX_BUILD = '1122b';
     try {
       if (!window.fetch) return;
       fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
