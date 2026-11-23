@@ -180,10 +180,23 @@
   }
 
   /* ---------- 6. 渲染 ---------- */
+  /* 全程时长 / 人均耗时：新数据直接读，旧缓存（v1122k 及以前生成的结果）现场推算，绝不显示 — */
+  function spanOf(s) {
+    var m = s.metrics || {};
+    if (m.spanMin !== undefined && m.spanMin !== null) return m.spanMin;
+    return m.worstTimeMin;                       // 全程时长 ≡ 最慢那人的全程时间
+  }
+  function avgOf(s) {
+    var m = s.metrics || {};
+    if (m.avgTimeMin !== undefined && m.avgTimeMin !== null) return m.avgTimeMin;
+    var n = (s.legs && s.legs.length) || 0;
+    return n ? (Number(m.totalTimeMin) || 0) / n : m.totalTimeMin;
+  }
+
   function buildBlock(schemes) {
-    var mTime  = minOf(schemes, function (s) { return s.metrics && s.metrics.totalTimeMin; });
+    var mSpan  = minOf(schemes, function (s) { return spanOf(s); });
+    var mAvg   = minOf(schemes, function (s) { return avgOf(s); });
     var mCost  = minOf(schemes, function (s) { return s.metrics && s.metrics.totalCost; });
-    var mWorst = minOf(schemes, function (s) { return s.metrics && s.metrics.worstTimeMin; });
     var mWait  = minOf(schemes, function (s) { return s.metrics && s.metrics.maxWaitMin; });
     var mScore = minOf(schemes, function (s) { return s.score; });   // 额外代价越低越优
 
@@ -192,11 +205,11 @@
     /* Q-02 之后人数少时可能只有 1~2 套方案，标题与副注不能写死"三" */
     var nSchemes = schemes.length;
     html.push('<h3 class="jbx-ct-title">' + (nSchemes >= 3 ? '三方案指标对比' : '方案指标对比（共 ' + nSchemes + ' 套）'));
-    html.push('<small>绿底 = 该列最优；五项都是越小越好，额外代价 0 = 本次所有方案里综合最省事；手机上表格可左右滑动查看全部列（首列方案名会固定，长按可看全称）</small></h3>');
+    html.push('<small>绿底 = 该列最优，各列都是越小越好；额外代价 0 = 本次所有方案里综合最省事；手机上表格可左右滑动查看全部列（首列方案名会固定，长按可看全称）</small></h3>');
     html.push('<div class="jbx-ct-wrap">');
     html.push('<table class="' + TABLE_CLASS + '">');
     html.push("<thead><tr>");
-    html.push("<th>方案</th><th>总耗时</th><th>总费用</th><th>最长单人</th>");
+    html.push("<th>方案</th><th>全程时长</th><th>人均耗时</th><th>总费用</th>");
     html.push("<th>最长等待</th><th>额外代价</th><th>瓶颈成员</th><th>结论</th>");
     html.push("</tr></thead><tbody>");
 
@@ -213,12 +226,12 @@
         (isBest ? '<span class="jbx-ct-badge">推荐</span>' : "") +
         "</td>");
 
-      html.push('<td class="' + (isMin(mt.totalTimeMin, mTime) ? "jbx-ct-min" : "") + '">' +
-        fmt(mt.totalTimeMin, '<span class="jbx-ct-unit">分</span>') + "</td>");
+      html.push('<td class="' + (isMin(spanOf(s), mSpan) ? "jbx-ct-min" : "") + '" title="最早出门那个人 → 全员抵达目的地">' +
+        fmt(spanOf(s), '<span class="jbx-ct-unit">分</span>') + "</td>");
+      html.push('<td class="' + (isMin(avgOf(s), mAvg) ? "jbx-ct-min" : "") + '" title="全员耗时相加 ÷ 人数">' +
+        fmt(avgOf(s), '<span class="jbx-ct-unit">分</span>') + "</td>");
       html.push('<td class="' + (isMin(mt.totalCost, mCost) ? "jbx-ct-min" : "") + '">¥' +
         fmt(mt.totalCost) + "</td>");
-      html.push('<td class="' + (isMin(mt.worstTimeMin, mWorst) ? "jbx-ct-min" : "") + '">' +
-        fmt(mt.worstTimeMin, '<span class="jbx-ct-unit">分</span>') + "</td>");
       html.push('<td class="' + (isMin(mt.maxWaitMin, mWait) ? "jbx-ct-min" : "") + '">' +
         fmt(mt.maxWaitMin, '<span class="jbx-ct-unit">分</span>') + "</td>");
       html.push('<td class="' + (isMin(s.score, mScore) ? "jbx-ct-min" : "") + '">' +
@@ -231,8 +244,9 @@
     }
 
     html.push("</tbody></table></div>");
-    html.push('<p class="jbx-ct-note">指标含义：总耗时 / 总费用 = 全员合计；最长单人 = 用时最久的那个人（即瓶颈）；' +
-      '最长等待 = 等人对齐出发所花的额外时间；额外代价 = 四项各比“本次全部方案里最好那个”多付出的比例，按发起人设的权重加权，'
+    html.push('<p class="jbx-ct-note">指标含义：<b>全程时长</b> = 集合时间 − 最早出发那个人的出门时间，再加集合点到目的地的同乘段（即最早出门的人到全员抵达目的地为止，也就是最慢那个人的全程时间）；' +
+      '<b>人均耗时</b> = 全员各自耗时相加 ÷ 人数，代表集体付出的时间成本；<b>总费用</b> = 全员费用相加；' +
+      '<b>最长等待</b> = 在集合点等最晚到的人所花的时间；<b>额外代价</b> = 四项各比“本次全部方案里最好那个”多付出的比例，按发起人设的权重加权，'
       + '0 表示综合最省事，越低越优（不是百分制得分）。</p>');
     html.push("</div>");
     return html.join("");

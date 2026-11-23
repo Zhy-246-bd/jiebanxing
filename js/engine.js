@@ -542,8 +542,19 @@ function finishScheme(scheme) {
   /* 瓶颈成员 = 单人耗时最长的人（并列都标，沿用 v0.1 行为） */
   scheme.legs.forEach(function (l) { l.isBottleneck = (l.totalMin === worst) && worst > 0; });
 
+  /* 【2026-11-23 按组长口径补两个面向用户的时间指标】
+   *   spanMin  全程时长：第一个人出门 → 全员抵达目的地。
+   *            集合场景下 = (集合时间 − 最早出发时间) + 集合点→目的地同乘段，
+   *            化简后恰好等于「最慢那个人的全程时间」（最后一段全员同乘，是同一个加数）。
+   *            前端口径说明就按「集合时间 − 最早出发」讲，这是最直观的算法。
+   *   avgTimeMin 人均耗时：totalTimeMin ÷ 人数，代表"集体一共花了多长的时间成本"折算到每人。
+   *   totalTimeMin 仍保留（评分模型按它算额外代价的比例），只是不再直接展示成"总耗时"。 */
+  var nLegs = scheme.legs.length || 1;
+
   scheme.metrics = {
     totalTimeMin: _round1(totalTime),
+    avgTimeMin: _round1(totalTime / nLegs),
+    spanMin: _round1(worst),
     totalCost: _round1(totalCost),
     worstTimeMin: _round1(worst),
     maxWaitMin: _round1(scheme.maxWaitMin || 0)
