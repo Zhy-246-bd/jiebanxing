@@ -213,6 +213,30 @@ body.result-page .leg b {
   color: var(--rp-ink);
 }
 
+/* ---------- 跳转高德导航按钮行（2026-11-23 张海燕） ---------- */
+body.result-page .nav-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+
+body.result-page .jbx-nav-btn {
+  border: 1px solid var(--rp-blue);
+  background: var(--rp-surface);
+  color: var(--rp-blue-deep);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  line-height: 1.2;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body.result-page .jbx-nav-btn:active {
+  background: var(--rp-sand);
+}
+
 /* ---------- 数据可信度提示条：沙色底，保留绿/黄/红语义 ---------- */
 body.result-page .data-hint {
   border-radius: 12px;

@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>结伴行 · 方案结果</title>
-  <link rel="stylesheet" href="css/style.css?v=1122m">
-  <link rel="stylesheet" href="css/style1.css?v=1122m">
-  <link rel="stylesheet" href="css/result.css?v=1122m">
+  <link rel="stylesheet" href="css/style.css?v=1122n">
+  <link rel="stylesheet" href="css/style1.css?v=1122n">
+  <link rel="stylesheet" href="css/result.css?v=1122n">
   <style>
     /* 本页补充：电脑端布局不动，只增强移动端与按钮交互；颜色全部走 CSS 变量 */
 
@@ -114,12 +114,12 @@
   <!-- 配置：config.js 进仓库（线上 GitHub Pages 靠它拿 Key 和代理地址）；
        config.local.js 不进仓库（本地覆盖）。
        新拉代码的人：复制 js/config.example.js 为 js/config.local.js，填入自己的 Key。 -->
-  <script src="js/config.js?v=1122m"
+  <script src="js/config.js?v=1122n"
           onerror="console.info('%c[结伴行] 未找到 js/config.js，地图不可用。','color:#e67e22')"></script>
-  <script src="js/config.local.js?v=1122m"
+  <script src="js/config.local.js?v=1122n"
           onerror="console.info('%c[结伴行] 未找到 js/config.local.js，使用仓库配置（js/config.js）。','color:#8a97a0')"></script>
 
-  <script src="js/formats.js?v=1122m"></script>
+  <script src="js/formats.js?v=1122n"></script>
   <script>
     // 返回去向：在房间里的回房间页，单机演示的回录入页（单机版已改名 demo.html）
     document.getElementById("backBtn").addEventListener("click", function () {
@@ -152,6 +152,23 @@
           (l.overBudget ? '<span class="over-budget">超预算 ¥' + l.overBudgetBy + '</span>' : '') +
           '：' + segs + '</div>';
       }).join("");
+      /* 2026-11-23 张海燕：每套方案加「跳转高德导航」按钮行。
+         · 目的地按钮：所有方案都有（快照里带 destCoord 精确坐标）
+         · 集合点按钮：方案二/三的行程里有非目的地终点（即集合点），一套方案可能多个（方案三各对各有集合点）
+         点击后拉起高德 App 导航（手机浏览器/WebView 由 URI API + callnative 处理，
+         起点留空 = 高德自动用当前位置）。 */
+      var _navMeets = [];
+      s.legs.forEach(function (l) {
+        (l.segments || []).forEach(function (seg) {
+          if (seg.to && seg.to !== data.dest && _navMeets.indexOf(seg.to) < 0) { _navMeets.push(seg.to); }
+        });
+      });
+      var _navHtml = '<div class="nav-row">' +
+        '<button type="button" class="jbx-nav-btn" data-nav-dest="1">🧭 导航到目的地</button>' +
+        _navMeets.map(function (m) {
+          return '<button type="button" class="jbx-nav-btn" data-nav-meet="' + m + '">🧭 到「' + m + '」集合</button>';
+        }).join("") +
+        '</div>';
       card.innerHTML =
         '<span class="scheme-score">额外代价 ' + s.score + '</span>' +
         '<span class="scheme-rank' + (best ? " best" : "") + '">' + (best ? "★ 推荐" : "备选") + '</span>' +
@@ -162,7 +179,7 @@
         '<div class="metric"><b>' + (s.metrics.avgTimeMin != null ? s.metrics.avgTimeMin : Math.round(s.metrics.totalTimeMin / Math.max(1, (s.legs || []).length) * 10) / 10) + '</b><span>人均耗时(分)</span></div>' +
         '<div class="metric"><b>¥' + s.metrics.totalCost + '</b><span>总费用</span></div>' +
         '<div class="metric"><b>' + s.metrics.maxWaitMin + '</b><span>最长等待(分)</span></div>' +
-        '</div>' + legsHtml;
+        '</div>' + legsHtml + _navHtml;
       box.appendChild(card);
     });
 
@@ -211,16 +228,80 @@
         }
       });
     })();
+
+    /* ===== 跳转高德导航（2026-11-23 张海燕）=====
+     * 用高德 URI API（uri.amap.com/navigation）：手机浏览器/WebView 里 callnative=1
+     * 会尝试直接拉起高德 App 进入真实导航；起点不传 = 高德自动用「我的位置」。
+     * 坐标来源优先级：快照精确坐标（成员选点/目的地）> 地图已解析坐标（window.JBX_MAP_COORDS，
+     * 由 map-view.js 在画图时顺手暴露）> 点击时兜底地理编码（AMap.Geocoder，带城市偏置）。 */
+    (function () {
+      function _good(c) {
+        return c && c.lng != null && c.lat != null && c.lng !== "" && c.lat !== "" &&
+          isFinite(+c.lng) && isFinite(+c.lat) && !(+c.lng === 0 && +c.lat === 0);
+      }
+
+      function openAmapNav(lng, lat, name) {
+        var uri = "https://uri.amap.com/navigation?to=" + (+lng) + "," + (+lat) + "," +
+          encodeURIComponent(name || data.dest || "目的地") +
+          "&mode=car&policy=1&src=jiebanxing&coordinate=gaode&callnative=1";
+        /* APK WebView 壳：如果壳注入了 5+ 运行时（plus），用原生方式开外部页面最稳；
+           普通手机浏览器直接跳 URI，高德的落地页会引导拉起 App。 */
+        try {
+          if (window.plus && window.plus.runtime && typeof window.plus.runtime.openURL === "function") {
+            window.plus.runtime.openURL(uri);
+            return;
+          }
+        } catch (e) { /* plus 不存在就走普通跳转 */ }
+        window.location.href = uri;
+      }
+
+      /* 兜底地理编码：地图还没画完（JBX_MAP_COORDS 没有）时点击才走这条路 */
+      function _geocode(name, cb) {
+        if (!window.AMap) { alert("地图还没加载好，请等两秒再点导航"); return; }
+        try {
+          var g = new window.AMap.Geocoder({ city: data.city || "全国" });
+          g.getLocation(name, function (status, res) {
+            if (status === "complete" && res && res.poiList && res.poiList.pois && res.poiList.pois.length) {
+              var p = res.poiList.pois[0];
+              cb(p.location.getLng(), p.location.getLat());
+            } else {
+              alert("「" + name + "」没能解析出坐标，无法导航");
+            }
+          });
+        } catch (e) { alert("地理编码异常：" + e.message); }
+      }
+
+      function resolveAndNav(name, isDest) {
+        /* 1) 快照精确坐标：目的地 */
+        if (isDest && _good(data.destCoord)) { openAmapNav(data.destCoord.lng, data.destCoord.lat, name); return; }
+        /* 2) 地图画图时解析过的坐标（含成员起点与全部集合点） */
+        var cs = window.JBX_MAP_COORDS;
+        if (cs && cs[name] && cs[name].length === 2) { openAmapNav(cs[name][0], cs[name][1], name); return; }
+        /* 3) 兜底：现场地理编码 */
+        _geocode(name, function (lng, lat) { openAmapNav(lng, lat, name); });
+      }
+
+      var list = document.getElementById("schemeList");
+      if (list) {
+        list.addEventListener("click", function (ev) {
+          var btn = ev.target && ev.target.closest ? ev.target.closest(".jbx-nav-btn") : null;
+          if (!btn) return;
+          if (btn.hasAttribute("data-nav-dest")) { resolveAndNav(data.dest, true); return; }
+          var meet = btn.getAttribute("data-nav-meet");
+          if (meet) { resolveAndNav(meet, false); }
+        });
+      }
+    })();
   </script>
-  <script src="js/compare-table.js?v=1122m"></script>
-  <script src="js/data-hint.js?v=1122m"></script>
-  <script src="js/map-view.js?v=1122m"></script>
+  <script src="js/compare-table.js?v=1122n"></script>
+  <script src="js/data-hint.js?v=1122n"></script>
+  <script src="js/map-view.js?v=1122n"></script>
   <script>
-  /* ===== 版本自愈（v1122m 起）：result.html 与 js/css 也纳入，
+  /* ===== 版本自愈（v1122n 起）：result.html 与 js/css 也纳入，
      防 App 内 WebView 一直吃旧缓存（11-22 用户 App 内对比表渲染成旧两列版即是此因）。
      每次发版把 JBX_BUILD、index.html ?v=、index1.html JBX_BUILD 和 version.json 改成同一个新值。 */
   (function () {
-    var JBX_BUILD = '1122m';
+    var JBX_BUILD = '1122n';
     try {
       if (!window.fetch) return;
       fetch('version.json?t=' + Date.now(), { cache: 'no-store' })

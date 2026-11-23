@@ -484,6 +484,9 @@
       (rs || []).forEach(function (r) {
         if (r && r.coord) coords[r.name] = r.coord; else if (r) missed.push(r.name);
       });
+      /* 2026-11-23 张海燕：把解析好的坐标暴露给结果页「跳转高德导航」按钮，
+         免得点导航时又重复发一遍地理编码请求。结构 { 地点名: [lng, lat] }。 */
+      try { window.JBX_MAP_COORDS = coords; } catch (e) { /* 忽略 */ }
 
       /* 一个点都没解析出来：多半是 Key 无效（安全密钥没配/配错） */
       if (!Object.keys(coords).length) {
