@@ -602,12 +602,12 @@
             <button type="button" class="pref-chip weight-chip" data-preset="comfort">少等待</button>
           </div>
           <div class="weight-inputs">
-            <label>耗时<input id="wTime" type="number" min="0" max="100" step="5" inputmode="numeric" placeholder="40"></label>
+            <label>人均耗时<input id="wTime" type="number" min="0" max="100" step="5" inputmode="numeric" placeholder="40"></label>
             <label>费用<input id="wCost" type="number" min="0" max="100" step="5" inputmode="numeric" placeholder="20"></label>
             <label>单人最长<input id="wWorst" type="number" min="0" max="100" step="5" inputmode="numeric" placeholder="30"></label>
             <label>等待<input id="wWait" type="number" min="0" max="100" step="5" inputmode="numeric" placeholder="10"></label>
           </div>
-          <p class="weight-tip">比例填多少都行，会自动换算；全部留空＝默认 40 / 20 / 30 / 10。</p>
+          <p class="weight-tip">比例填多少都行，会自动换算；全部留空＝默认 40 / 20 / 30 / 10。时间项按人均耗时（全员耗时相加 ÷ 人数）算。</p>
         </div>
         <div class="confluence-wrap" id="confluenceWrap">
           <div class="confluence-masked" id="confluenceMask" hidden>
@@ -1006,7 +1006,7 @@
         const plan = r.room && r.room.plan;
         if (!plan || !plan.jbx) throw new Error('发起人还没生成方案，请稍等');
         localStorage.setItem('jbx_result', JSON.stringify(plan.jbx));
-        location.href = 'result.html?v=1122l';
+        location.href = 'result.html?v=1122m';
       }).catch(err => toast(err.message || '方案读取失败，请重试'));
     }
 
@@ -2080,7 +2080,7 @@
       if (wTip) {
         wTip.textContent = state.planReady
           ? '方案已按当前偏好生成，偏好已锁定；想换偏好请新建一个房间。'
-          : '比例填多少都行，会自动换算；全部留空＝默认 40 / 20 / 30 / 10。';
+          : '比例填多少都行，会自动换算；全部留空＝默认 40 / 20 / 30 / 10。时间项按人均耗时（全员耗时相加 ÷ 人数）算。';
       }
 
       // 房间标题区：邀请码 + 目的地
@@ -2503,7 +2503,7 @@
         state.planReady = true;
         if (r && r.reused) toast('方案已存在，直接读取');
         renderRoom();
-        location.href = 'result.html?v=1122l';
+        location.href = 'result.html?v=1122m';
       }).catch(err => {
         toast(err.message || '方案生成失败，请重试');
       }).then(() => {
@@ -2722,10 +2722,10 @@
   <!-- 版本角标：只用来确认手机加载的是不是最新版（微信/浏览器缓存很顽固）。
        极淡。2026-11-22 起可点：连点查看环境诊断（UA/壳标记/plus），
        远程排障"她打包了没有"用。 -->
-  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1122l</div>
+  <div id="verBadge" style="position:fixed;right:6px;bottom:4px;font-size:10px;line-height:1;color:rgba(58,66,73,.32);z-index:5">v1122m</div>
   <script>
   document.getElementById('verBadge').addEventListener('click', function () {
-    alert('结伴行环境诊断\n─────────────\n版本: v1122l\n壳标记 __jbxShellBridge: '
+    alert('结伴行环境诊断\n─────────────\n版本: v1122m\n壳标记 __jbxShellBridge: '
       + (window.__jbxShellBridge === 1 ? '有（App 已接定位桥）' : '无（旧壳或标记未注入）')
       + '\nplus 对象: ' + (window.plus ? '有' : '无')
       + '\nUA 含 uni-app: ' + (/uni-app/i.test(navigator.userAgent) ? '是' : '否')
@@ -2740,7 +2740,7 @@
      页面启动后向服务器要一次小文件（强制走网络），发现不一致就带 ?v= 重新进页面，
      ?v= 让 WebView 的缓存键变化，于是必然拿到新页面。 */
   (function () {
-    var JBX_BUILD = '1122l';
+    var JBX_BUILD = '1122m';
     try {
       if (!window.fetch) return;
       fetch('version.json?t=' + Date.now(), { cache: 'no-store' })

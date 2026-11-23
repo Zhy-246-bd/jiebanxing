@@ -548,7 +548,7 @@ function finishScheme(scheme) {
    *            化简后恰好等于「最慢那个人的全程时间」（最后一段全员同乘，是同一个加数）。
    *            前端口径说明就按「集合时间 − 最早出发」讲，这是最直观的算法。
    *   avgTimeMin 人均耗时：totalTimeMin ÷ 人数，代表"集体一共花了多长的时间成本"折算到每人。
-   *   totalTimeMin 仍保留（评分模型按它算额外代价的比例），只是不再直接展示成"总耗时"。 */
+   *   totalTimeMin 保留做内部统计（对比表的"人均耗时"列就是它 ÷ 人数）。 */
   var nLegs = scheme.legs.length || 1;
 
   scheme.metrics = {
@@ -690,7 +690,28 @@ function resetWeights() {
  *         差距大时才会拉开，而且数字能直接读成百分比，不再有"硬凑的 100 分"。
  *   换权重不需要重新查路线：metrics 已经算好了，这里只做纯数学重排。 */
 var _METRIC_KEYS = ["totalTime", "totalCost", "worstTime", "maxWait"];
-var _METRIC_FIELDS = { totalTime: "totalTimeMin", totalCost: "totalCost", worstTime: "worstTimeMin", maxWait: "maxWaitMin" };
+
+/* 单项取值。【2026-11-23 组长口径】时间项不再用「全员相加的总耗时」
+ * （6 个人 467.8 分，数字既大又不对应任何一个人的真实体感），改用「人均耗时」
+ * = 全员总耗时 ÷ 人数：集体付出的时间成本摊到每个人头上。
+ * 为什么不用「全程时长」：全程时长 ≡ 最慢那个人的耗时，和已有的 worstTime
+ * 是同一个数，换过去等于把两项权重（40%+30%）压在一个人身上，重复计算。
+ * 为什么排序不会变：同一房间人数固定，人均与总数在方案间是同一比例缩放，
+ * 相对差距完全一致 —— 分数、排序都和原来一模一样，只是数字更好读。
+ * 旧缓存（v1122l 及以前生成的结果）没有 avgTimeMin，用 legs 长度现算兜底。 */
+function _metricValue(s, key) {
+  var m = (s && s.metrics) || {};
+  if (key === "totalTime") {
+    if (m.avgTimeMin !== undefined && m.avgTimeMin !== null) return +m.avgTimeMin || 0;
+    var n = (s && s.legs && s.legs.length) || 0;
+    var t = +m.totalTimeMin || 0;
+    return n ? t / n : t;
+  }
+  if (key === "totalCost") return +m.totalCost || 0;
+  if (key === "worstTime") return +m.worstTimeMin || 0;
+  if (key === "maxWait") return +m.maxWaitMin || 0;
+  return 0;
+}
 
 function scoreSchemes(schemes, weights) {
   var w = _sanitizeWeights(weights || getWeights());
@@ -699,17 +720,15 @@ function scoreSchemes(schemes, weights) {
 
   if (list.length) {
     _METRIC_KEYS.forEach(function (k) {
-      var f = _METRIC_FIELDS[k];
-      var vals = list.map(function (s) { return (s.metrics && +s.metrics[f]) || 0; });
+      var vals = list.map(function (s) { return _metricValue(s, k); });
       base[k] = Math.min.apply(null, vals);
     });
 
     list.forEach(function (s) {
       var d = {}, cost = 0;
       _METRIC_KEYS.forEach(function (k) {
-        var f = _METRIC_FIELDS[k];
-        var v = (s.metrics && +s.metrics[f]) || 0;
-        var maxV = Math.max.apply(null, list.map(function (x) { return (x.metrics && +x.metrics[f]) || 0; }));
+        var v = _metricValue(s, k);
+        var maxV = Math.max.apply(null, list.map(function (x) { return _metricValue(x, k); }));
         /* 基准为 0（例如直达的最长等待）时不能除 0，改用"与最大值的差距"缩放 */
         var rel = base[k] > 0 ? (v - base[k]) / base[k]
                               : (maxV > 0 ? (v - base[k]) / maxV : 0);

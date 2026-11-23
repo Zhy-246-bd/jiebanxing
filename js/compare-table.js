@@ -228,7 +228,7 @@
 
       html.push('<td class="' + (isMin(spanOf(s), mSpan) ? "jbx-ct-min" : "") + '" title="最早出门那个人 → 全员抵达目的地">' +
         fmt(spanOf(s), '<span class="jbx-ct-unit">分</span>') + "</td>");
-      html.push('<td class="' + (isMin(avgOf(s), mAvg) ? "jbx-ct-min" : "") + '" title="全员耗时相加 ÷ 人数">' +
+      html.push('<td class="' + (isMin(avgOf(s), mAvg) ? "jbx-ct-min" : "") + '" title="全员耗时相加 ÷ 人数；额外代价的时间项取的就是它">' +
         fmt(avgOf(s), '<span class="jbx-ct-unit">分</span>') + "</td>");
       html.push('<td class="' + (isMin(mt.totalCost, mCost) ? "jbx-ct-min" : "") + '">¥' +
         fmt(mt.totalCost) + "</td>");
@@ -245,8 +245,8 @@
 
     html.push("</tbody></table></div>");
     html.push('<p class="jbx-ct-note">指标含义：<b>全程时长</b> = 集合时间 − 最早出发那个人的出门时间，再加集合点到目的地的同乘段（即最早出门的人到全员抵达目的地为止，也就是最慢那个人的全程时间）；' +
-      '<b>人均耗时</b> = 全员各自耗时相加 ÷ 人数，代表集体付出的时间成本；<b>总费用</b> = 全员费用相加；' +
-      '<b>最长等待</b> = 在集合点等最晚到的人所花的时间；<b>额外代价</b> = 四项各比“本次全部方案里最好那个”多付出的比例，按发起人设的权重加权，'
+      '<b>人均耗时</b> = 全员各自耗时相加 ÷ 人数，代表集体付出的时间成本，<b>也就是额外代价里的时间项</b>（不再用全员相加的总数，那个数只跟人数有关）；<b>总费用</b> = 全员费用相加；' +
+      '<b>最长等待</b> = 在集合点等最晚到的人所花的时间；<b>额外代价</b> = 用「人均耗时 / 总费用 / 单人最长 / 最长等待」四项，各比“本次全部方案里最好那个”多付出的比例，按发起人设的权重加权，'
       + '0 表示综合最省事，越低越优（不是百分制得分）。</p>');
     html.push("</div>");
     return html.join("");
