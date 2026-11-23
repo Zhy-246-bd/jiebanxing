@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>结伴行 · 方案结果</title>
-  <link rel="stylesheet" href="css/style.css?v=1122j">
-  <link rel="stylesheet" href="css/style1.css?v=1122j">
-  <link rel="stylesheet" href="css/result.css?v=1122j">
+  <link rel="stylesheet" href="css/style.css?v=1122k">
+  <link rel="stylesheet" href="css/style1.css?v=1122k">
+  <link rel="stylesheet" href="css/result.css?v=1122k">
   <style>
     /* 本页补充：电脑端布局不动，只增强移动端与按钮交互；颜色全部走 CSS 变量 */
 
@@ -114,12 +114,12 @@
   <!-- 配置：config.js 进仓库（线上 GitHub Pages 靠它拿 Key 和代理地址）；
        config.local.js 不进仓库（本地覆盖）。
        新拉代码的人：复制 js/config.example.js 为 js/config.local.js，填入自己的 Key。 -->
-  <script src="js/config.js?v=1122j"
+  <script src="js/config.js?v=1122k"
           onerror="console.info('%c[结伴行] 未找到 js/config.js，地图不可用。','color:#e67e22')"></script>
-  <script src="js/config.local.js?v=1122j"
+  <script src="js/config.local.js?v=1122k"
           onerror="console.info('%c[结伴行] 未找到 js/config.local.js，使用仓库配置（js/config.js）。','color:#8a97a0')"></script>
 
-  <script src="js/formats.js?v=1122j"></script>
+  <script src="js/formats.js?v=1122k"></script>
   <script>
     // 返回去向：在房间里的回房间页，单机演示的回录入页（单机版已改名 demo.html）
     document.getElementById("backBtn").addEventListener("click", function () {
@@ -212,15 +212,15 @@
       });
     })();
   </script>
-  <script src="js/compare-table.js?v=1122j"></script>
-  <script src="js/data-hint.js?v=1122j"></script>
-  <script src="js/map-view.js?v=1122j"></script>
+  <script src="js/compare-table.js?v=1122k"></script>
+  <script src="js/data-hint.js?v=1122k"></script>
+  <script src="js/map-view.js?v=1122k"></script>
   <script>
-  /* ===== 版本自愈（v1122j 起）：result.html 与 js/css 也纳入，
+  /* ===== 版本自愈（v1122k 起）：result.html 与 js/css 也纳入，
      防 App 内 WebView 一直吃旧缓存（11-22 用户 App 内对比表渲染成旧两列版即是此因）。
      每次发版把 JBX_BUILD、index.html ?v=、index1.html JBX_BUILD 和 version.json 改成同一个新值。 */
   (function () {
-    var JBX_BUILD = '1122j';
+    var JBX_BUILD = '1122k';
     try {
       if (!window.fetch) return;
       fetch('version.json?t=' + Date.now(), { cache: 'no-store' })

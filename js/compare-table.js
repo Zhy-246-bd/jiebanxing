@@ -63,7 +63,7 @@
     var body = m ? m[1] : s;                 // 去掉“方案一：”前缀（序号徽章已表达）
     body = body.replace(/^全员在「(.+)」汇合$/, "全员汇合·$1");
     body = body.replace(/^部分汇合（(.+)）$/, "部分汇合·$1");
-    if (body.length > 8) body = body.slice(0, 8) + "…";
+    if (body.length > 16) body = body.slice(0, 16) + "…";   // 两行×约8字，超出才截
     return body || (full || "");
   }
 
@@ -142,7 +142,7 @@
       "table." + TABLE_CLASS + " th{background:var(--primary,#2b6cb0);color:#fff;font-weight:600;",
       "  font-size:12.5px;padding:10px 10px;text-align:center;white-space:nowrap;",
       "  border-bottom:1px solid rgba(255,255,255,.18);}",
-      "table." + TABLE_CLASS + " th:first-child{text-align:left;position:sticky;left:0;z-index:3;}",
+      "table." + TABLE_CLASS + " th:first-child{text-align:left;position:sticky;left:0;z-index:3;width:150px;min-width:150px;box-shadow:1px 0 0 rgba(255,255,255,.35);}",
 
       "table." + TABLE_CLASS + " td{padding:10px;text-align:center;white-space:nowrap;",
       "  border-top:1px solid #edf2f7;background:#fff;}",
@@ -150,7 +150,7 @@
       "table." + TABLE_CLASS + " tbody tr:nth-child(even) td{background:#fafcff;}",
 
       /* 首列吸附：手机上往右滑时方案名始终可见 */
-      "table." + TABLE_CLASS + " td:first-child{text-align:left;position:sticky;left:0;z-index:2;",
+      "table." + TABLE_CLASS + " td:first-child{text-align:left;position:sticky;left:0;z-index:2;width:150px;min-width:150px;",
       "  font-weight:600;box-shadow:1px 0 0 #edf2f7;}",
       "table." + TABLE_CLASS + " tbody tr:nth-child(even) td:first-child{background:#fafcff;}",
 
@@ -162,10 +162,11 @@
       "  border-radius:999px;background:#edf2f7;color:var(--text-sub,#718096);font-size:11px;",
       "  font-weight:700;margin-right:6px;vertical-align:1px;}",
       ".jbx-ct-rank.is-best{background:var(--ok,#2f855a);color:#fff;}",
-      /* 首列短名：限宽省略，全名在 title；给右侧滚动区留更多可视宽度（2026-11-23） */
-      ".jbx-ct-name{display:inline-block;max-width:96px;overflow:hidden;text-overflow:ellipsis;",
-      "  white-space:nowrap;vertical-align:middle;}",
-      ".jbx-ct-badge{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;",,
+      /* 首列短名：最多两行换行展示（不用省略号硬截），全名仍在 title；
+         行数上限防异常长名把首列拓高（2026-11-23） */
+      ".jbx-ct-name{display:inline-block;max-width:100px;max-height:40px;overflow:hidden;",
+      "  white-space:normal;word-break:break-all;line-height:20px;vertical-align:middle;}",
+      ".jbx-ct-badge{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;",
       "  background:rgba(47,133,90,.14);color:var(--ok,#2f855a);font-size:11px;font-weight:700;vertical-align:1px;}",
       ".jbx-ct-note{margin:6px 0 0;font-size:12px;line-height:1.6;color:var(--text-sub,#718096);}",
       ".jbx-ct-empty{margin:18px 0;padding:16px;border:1px dashed #cbd5e0;border-radius:var(--radius,12px);",
@@ -191,7 +192,7 @@
     /* Q-02 之后人数少时可能只有 1~2 套方案，标题与副注不能写死"三" */
     var nSchemes = schemes.length;
     html.push('<h3 class="jbx-ct-title">' + (nSchemes >= 3 ? '三方案指标对比' : '方案指标对比（共 ' + nSchemes + ' 套）'));
-    html.push('<small>绿底 = 该列最优；五项都是越小越好，额外代价 0 = 本次所有方案里综合最省事；手机上表格可左右滑动查看全部列（首列方案名会固定，长按方案名可看全称）</small></h3>');
+    html.push('<small>绿底 = 该列最优；五项都是越小越好，额外代价 0 = 本次所有方案里综合最省事；手机上表格可左右滑动查看全部列（首列方案名会固定，长按可看全称）</small></h3>');
     html.push('<div class="jbx-ct-wrap">');
     html.push('<table class="' + TABLE_CLASS + '">');
     html.push("<thead><tr>");
